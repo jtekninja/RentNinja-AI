@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: rentninja-ai
+    runtime: node
+    plan: free
+    region: ohio
+    autoDeploy: true
+    buildCommand: npm install && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: AUTH_TRUST_HOST
+        value: "true"
+      - key: MONGODB_URI
+        sync: false
+      - key: MONGODB_DB
+        value: rentninja-ai
+      - key: NEXTAUTH_URL
+        sync: false
+      - key: NEXT_PUBLIC_APP_URL
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PRO_PRICE_ID
+        sync: false
