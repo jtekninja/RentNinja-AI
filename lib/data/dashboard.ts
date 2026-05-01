@@ -1,29 +1,17 @@
 import { Types } from "mongoose";
 import { dbConnect } from "@/lib/mongodb";
+import { serializeApplicantRecord } from "@/lib/applicant-serialization";
 import Applicant from "@/models/Applicant";
 import Organization from "@/models/Organization";
 import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
 
-function serializeApplicant(applicant: Record<string, unknown>): ApplicantRecord {
-  return ({
-    ...applicant,
-    _id: String(applicant._id),
-    organizationId: String(applicant.organizationId),
-    ownerId: String(applicant.ownerId),
-    createdAt: new Date(String(applicant.createdAt)).toISOString(),
-    updatedAt: new Date(String(applicant.updatedAt)).toISOString()
-  } as unknown) as ApplicantRecord;
-}
-
 export async function getDashboardData(userId: string, organizationId: string) {
   await dbConnect();
 
-  const ownerObjectId = new Types.ObjectId(userId);
   const organizationObjectId = new Types.ObjectId(organizationId);
 
   const [applicants, organization] = await Promise.all([
     Applicant.find({
-      ownerId: ownerObjectId,
       organizationId: organizationObjectId
     })
       .sort({ createdAt: -1 })
@@ -31,7 +19,7 @@ export async function getDashboardData(userId: string, organizationId: string) {
     Organization.findById(organizationObjectId).lean()
   ]);
 
-  const normalizedApplicants = applicants.map((item) => serializeApplicant(item));
+  const normalizedApplicants = applicants.map((item) => serializeApplicantRecord(item) as unknown as ApplicantRecord);
   const strong = normalizedApplicants.filter((item) => item.decision === "Strong").length;
   const review = normalizedApplicants.filter((item) => item.decision === "Review").length;
   const risk = normalizedApplicants.filter((item) => item.decision === "Risk").length;
@@ -46,7 +34,12 @@ export async function getDashboardData(userId: string, organizationId: string) {
           _id: String(organization._id),
           name: organization.name,
           plan: organization.plan,
-          billingStatus: organization.billingStatus
+          billingStatus: organization.billingStatus,
+          hasBillingCustomer: Boolean(organization.stripeCustomerId),
+          complianceSettings: {
+            defaultPropertyCity: organization.complianceSettings?.defaultPropertyCity || "NYC",
+            defaultPropertyState: organization.complianceSettings?.defaultPropertyState || "NY"
+          }
         }
       : null,
     applicants: normalizedApplicants,
@@ -59,4 +52,3 @@ export async function getDashboardData(userId: string, organizationId: string) {
     }
   };
 }
-

@@ -11,6 +11,7 @@ export function LoginForm() {
   const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -19,8 +20,10 @@ export function LoginForm() {
     setPending(true);
     setError("");
 
+    const normalizedIdentifier = identifier.trim().toLowerCase();
+
     const result = await signIn("credentials", {
-      identifier,
+      identifier: normalizedIdentifier,
       password,
       redirect: false,
       callbackUrl
@@ -46,18 +49,36 @@ export function LoginForm() {
           placeholder="akeso80 or owner@rentninja.ai"
           value={identifier}
           onChange={(event) => setIdentifier(event.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          autoComplete="username"
+          spellCheck={false}
+          inputMode="email"
           required
         />
       </label>
 
       <label className="grid gap-2 text-sm text-slate-200">
-        Password
+        <div className="flex items-center justify-between gap-3">
+          <span>Password</span>
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition hover:text-white"
+            onClick={() => setShowPassword((current) => !current)}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
         <input
           className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
-          type="password"
+          type={showPassword ? "text" : "password"}
           placeholder="Enter your password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}
+          autoCapitalize="none"
+          autoCorrect="off"
+          autoComplete="current-password"
+          spellCheck={false}
           required
         />
       </label>

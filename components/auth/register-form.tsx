@@ -14,6 +14,7 @@ export function RegisterForm() {
     password: ""
   });
   const [pending, setPending] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -80,10 +81,19 @@ export function RegisterForm() {
       </label>
 
       <label className="grid gap-2 text-sm text-slate-200">
-        Password
+        <div className="flex items-center justify-between gap-3">
+          <span>Password</span>
+          <button
+            type="button"
+            className="text-xs font-semibold uppercase tracking-[0.2em] text-slate-300 transition hover:text-white"
+            onClick={() => setShowPassword((current) => !current)}
+          >
+            {showPassword ? "Hide" : "Show"}
+          </button>
+        </div>
         <input
           className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
-          type="password"
+          type={showPassword ? "text" : "password"}
           value={form.password}
           onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
           placeholder="At least 8 characters"
@@ -100,4 +110,3 @@ export function RegisterForm() {
     </form>
   );
 }
-

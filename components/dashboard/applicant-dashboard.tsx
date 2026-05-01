@@ -1,12 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { startTransition, useDeferredValue, useMemo, useState } from "react";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { SummaryCards } from "@/components/dashboard/summary-cards";
 import { BillingCard } from "@/components/dashboard/billing-card";
 import { ApplicantForm, type ApplicantFormValues } from "@/components/dashboard/applicant-form";
 import { ApplicantList, type ApplicantRecord } from "@/components/dashboard/applicant-list";
 import { Logo } from "@/components/ui/logo";
+import type { ApplicantComparison } from "@/lib/ai-types";
 
 type DashboardShellProps = {
   initialApplicants: ApplicantRecord[];
@@ -15,24 +18,34 @@ type DashboardShellProps = {
     name: string;
     plan: string;
     billingStatus: string;
+    hasBillingCustomer: boolean;
+    complianceSettings: {
+      defaultPropertyCity: string;
+      defaultPropertyState: string;
+    };
   } | null;
   user: {
     name?: string | null;
     email?: string | null;
+    role?: "owner" | "member";
   };
+  billingEnabled: boolean;
 };
 
 type DecisionFilter = "All" | "Strong" | "Review" | "Risk";
 type SortValue = "newest" | "highest-score" | "highest-affordability";
 
-export function ApplicantDashboard({ initialApplicants, organization, user }: DashboardShellProps) {
+export function ApplicantDashboard({ initialApplicants, organization, user, billingEnabled }: DashboardShellProps) {
   const [applicants, setApplicants] = useState(initialApplicants);
   const [query, setQuery] = useState("");
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>("All");
+  const [propertyFilter, setPropertyFilter] = useState("All properties");
   const [sortBy, setSortBy] = useState<SortValue>("newest");
   const [editingApplicant, setEditingApplicant] = useState<ApplicantFormValues | null>(null);
   const [pending, setPending] = useState(false);
   const [message, setMessage] = useState("");
+  const [comparison, setComparison] = useState<ApplicantComparison | null>(null);
+  const [comparisonPending, setComparisonPending] = useState(false);
 
   const deferredQuery = useDeferredValue(query);
 
@@ -45,18 +58,42 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
           return false;
         }
 
+        if (propertyFilter !== "All properties") {
+          const propertyLabel = [applicant.propertyAddress, applicant.propertyCity, applicant.propertyState, applicant.propertyPostalCode]
+            .filter(Boolean)
+            .join(", ");
+          if (propertyLabel !== propertyFilter) {
+            return false;
+          }
+        }
+
         if (!normalizedQuery) {
           return true;
         }
 
-        return [applicant.name, applicant.email, applicant.status].join(" ").toLowerCase().includes(normalizedQuery);
+        return [applicant.name, applicant.email, applicant.status, applicant.propertyAddress, applicant.propertyCity, applicant.propertyState, applicant.propertyPostalCode]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
       })
       .sort((a, b) => {
         if (sortBy === "highest-score") return b.totalScore - a.totalScore;
         if (sortBy === "highest-affordability") return b.affordabilityRatio - a.affordabilityRatio;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
       });
-  }, [applicants, decisionFilter, deferredQuery, sortBy]);
+  }, [applicants, decisionFilter, deferredQuery, propertyFilter, sortBy]);
+
+  const propertyOptions = useMemo(() => {
+    const uniqueProperties = Array.from(
+      new Set(
+        applicants
+          .map((applicant) => [applicant.propertyAddress, applicant.propertyCity, applicant.propertyState, applicant.propertyPostalCode].filter(Boolean).join(", "))
+          .filter(Boolean)
+      )
+    ).sort((a, b) => a.localeCompare(b));
+
+    return ["All properties", ...uniqueProperties];
+  }, [applicants]);
 
   const summary = useMemo(() => {
     const strong = applicants.filter((item) => item.decision === "Strong").length;
@@ -137,6 +174,30 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
     }
   }
 
+  async function runAiComparison() {
+    setComparisonPending(true);
+    setMessage("");
+
+    try {
+      const response = await fetch("/api/ai/compare", { method: "POST" });
+      const data = await response.json();
+
+      if (!response.ok) {
+        setMessage(data.message || "Unable to compare applicants.");
+        return;
+      }
+
+      setComparison(data);
+    } finally {
+      setComparisonPending(false);
+    }
+  }
+
+  const applicantNameById = useMemo(
+    () => Object.fromEntries(applicants.map((applicant) => [applicant._id, applicant.name])),
+    [applicants]
+  );
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(247,179,109,0.18),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(92,174,255,0.14),transparent_24%),linear-gradient(180deg,#10131a_0%,#0b0e13_100%)]">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
@@ -157,11 +218,16 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
                 <p className="font-semibold text-white">{user.name || "Operator"}</p>
                 <p>{user.email}</p>
               </div>
-              <form action="/api/auth/signout" method="post">
-                <Button variant="ghost" type="submit">
-                  Sign out
-                </Button>
-              </form>
+              {user.role === "owner" ? (
+                <Link href="/admin">
+                  <Button variant="secondary" type="button">
+                    Admin
+                  </Button>
+                </Link>
+              ) : null}
+              <Button variant="ghost" type="button" onClick={() => signOut({ callbackUrl: "/login" })}>
+                Sign out
+              </Button>
             </div>
           </div>
         </header>
@@ -175,12 +241,16 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
               submitting={pending}
               onSubmit={saveApplicant}
               onCancelEdit={() => setEditingApplicant(null)}
+              defaultPropertyCity={organization?.complianceSettings.defaultPropertyCity ?? ""}
+              defaultPropertyState={organization?.complianceSettings.defaultPropertyState ?? ""}
             />
             {organization ? (
               <BillingCard
                 organizationName={organization.name}
                 plan={organization.plan}
                 billingStatus={organization.billingStatus}
+                billingEnabled={billingEnabled}
+                hasBillingCustomer={organization.hasBillingCustomer}
               />
             ) : null}
           </div>
@@ -193,7 +263,7 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
                   <h2 className="mt-2 text-2xl font-semibold text-white">Applicants you can act on today</h2>
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <input
                     className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
                     placeholder="Search applicant"
@@ -213,6 +283,17 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
                   </select>
                   <select
                     className="rounded-full border border-white/10 bg-[#10141c] px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
+                    value={propertyFilter}
+                    onChange={(event) => setPropertyFilter(event.target.value)}
+                  >
+                    {propertyOptions.map((item) => (
+                      <option key={item} value={item}>
+                        {item}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
                     value={sortBy}
                     onChange={(event) => setSortBy(event.target.value as SortValue)}
                   >
@@ -223,8 +304,58 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
                 </div>
               </div>
 
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <Button type="button" onClick={runAiComparison} disabled={comparisonPending || applicants.length < 2}>
+                  {comparisonPending ? "Ranking applicants..." : "AI compare applicants"}
+                </Button>
+                <p className="text-sm text-slate-300">Compare the current pool and get a plain-English recommendation.</p>
+              </div>
+
               {message ? <p className="mt-4 text-sm text-amber-100">{message}</p> : null}
             </section>
+
+            {comparison ? (
+              <section className="rounded-[32px] border border-sky-300/15 bg-sky-300/8 p-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs uppercase tracking-[0.24em] text-sky-100">AI Comparison</p>
+                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
+                    Best fit: {applicantNameById[comparison.bestApplicantId] || "Top applicant"}
+                  </div>
+                </div>
+                <p className="mt-4 text-sm leading-6 text-slate-100">{comparison.overview}</p>
+                <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
+                  <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
+                    <p className="text-xs uppercase tracking-[0.22em] text-slate-300">Ranking</p>
+                    <ul className="mt-3 grid gap-2 text-sm text-slate-100">
+                      {comparison.ranking.map((item) => (
+                        <li key={item.applicantId} className="rounded-2xl border border-white/8 bg-white/5 px-3 py-3">
+                          <span className="font-semibold text-white">
+                            #{item.rank} {applicantNameById[item.applicantId] || "Applicant"}
+                          </span>
+                          <p className="mt-1 text-slate-300">{item.reason}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="grid gap-4">
+                    <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-300">Watchouts</p>
+                      <ul className="mt-3 grid gap-2 text-sm text-slate-100">
+                        {comparison.watchouts.map((item) => (
+                          <li key={item} className="rounded-2xl border border-white/8 bg-white/5 px-3 py-2">
+                            {item}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
+                      <p className="text-xs uppercase tracking-[0.22em] text-slate-300">Recommended next step</p>
+                      <p className="mt-3 text-sm leading-6 text-slate-100">{comparison.nextStep}</p>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
 
             <ApplicantList
               applicants={filteredApplicants}
@@ -234,9 +365,23 @@ export function ApplicantDashboard({ initialApplicants, organization, user }: Da
                   name: applicant.name,
                   email: applicant.email,
                   phone: applicant.phone,
+                  propertyAddress: applicant.propertyAddress,
+                  propertyCity: applicant.propertyCity,
+                  propertyState: applicant.propertyState,
+                  propertyPostalCode: applicant.propertyPostalCode,
+                  moveInDate: applicant.moveInDate,
+                  propertyAddressConfirmed: Boolean(applicant.propertyAddress),
+                  coApplicants: applicant.coApplicants,
+                  applicationSource: applicant.applicationSource as ApplicantFormValues["applicationSource"],
                   monthlyRent: applicant.monthlyRent,
                   monthlyIncome: applicant.monthlyIncome,
-                  creditScore: applicant.creditScore,
+                  housingSupport: applicant.housingSupport,
+                  supportProgram: applicant.supportProgram,
+                  monthlySubsidyAmount: applicant.monthlySubsidyAmount,
+                  tenantPortionRent: applicant.tenantPortionRent,
+                  subsidyStatus: applicant.subsidyStatus,
+                  inspectionStatus: applicant.inspectionStatus,
+                  residentScore: applicant.residentScore,
                   rentalHistoryScore: applicant.scores.rentalHistory,
                   rulesComplianceScore: applicant.scores.rulesCompliance,
                   timelineScore: applicant.scores.timeline,

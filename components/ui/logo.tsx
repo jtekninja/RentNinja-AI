@@ -1,7 +1,12 @@
 import Image from "next/image";
+import Link from "next/link";
 
-export function Logo() {
-  return (
+type LogoProps = {
+  href?: string;
+};
+
+export function Logo({ href }: LogoProps) {
+  const content = (
     <div className="inline-flex items-center gap-3 sm:gap-4">
       <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-[#080b12] shadow-[0_14px_30px_rgba(0,0,0,0.28)] sm:h-[4.5rem] sm:w-[4.5rem]">
         <Image
@@ -22,5 +27,15 @@ export function Logo() {
         </p>
       </div>
     </div>
+  );
+
+  if (!href) {
+    return content;
+  }
+
+  return (
+    <Link href={href} aria-label="Go to home page" className="inline-flex">
+      {content}
+    </Link>
   );
 }

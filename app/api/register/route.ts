@@ -2,15 +2,9 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/mongoose";
 import { registerSchema } from "@/lib/validators";
+import { slugify } from "@/lib/slugify";
 import Organization from "@/models/Organization";
 import User from "@/models/User";
-
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/(^-|-$)/g, "");
-}
 
 export async function POST(request: Request) {
   const json = await request.json();
@@ -55,4 +49,3 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ ok: true }, { status: 201 });
 }
-

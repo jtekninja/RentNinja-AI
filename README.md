@@ -87,6 +87,22 @@ Create or refresh those test admins with:
 npm run seed:test-admins
 ```
 
+## OpenAI Features
+
+To enable AI applicant review, applicant comparison, and application-file extraction, add:
+
+```env
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_MODEL=gpt-4o-mini
+```
+
+Current AI-assisted workflows:
+
+- Generate an AI review for an applicant
+- Compare the current applicant pool and rank the best fit
+- Upload a PDF or image application from common sources and prefill applicant fields with AI extraction
+- Paste application text or email summaries from common sources and prefill applicant fields with AI extraction
+
 ## Deploy On Render
 
 This repo now includes a Render Blueprint at `render.yaml`.
