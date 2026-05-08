@@ -1,21 +1,47 @@
 import "dotenv/config";
 import bcrypt from "bcryptjs";
+import { assertSafeToRun } from "./guard";
 import { dbConnect } from "@/lib/mongodb";
 import Applicant from "@/models/Applicant";
 import Organization from "@/models/Organization";
 import User from "@/models/User";
 import { calculateApplicantScore } from "@/lib/scoring";
 
+// ── Safety guard — must be the first thing that runs ──────────────────────────
+assertSafeToRun("seed.ts");
+
 async function seed() {
   await dbConnect();
 
-  await Promise.all([Applicant.deleteMany({}), User.deleteMany({}), Organization.deleteMany({})]);
+  // ── Log what is about to be destroyed ───────────────────────────────────────
+  const [applicantCount, userCount, orgCount] = await Promise.all([
+    Applicant.countDocuments(),
+    User.countDocuments(),
+    Organization.countDocuments(),
+  ]);
+
+  console.log("📊 Current database state:");
+  console.log(`  Organizations : ${orgCount}`);
+  console.log(`  Users         : ${userCount}`);
+  console.log(`  Applicants    : ${applicantCount}`);
+  console.log("");
+  console.log("🗑️  Deleting all existing records...");
+
+  await Promise.all([
+    Applicant.deleteMany({}),
+    User.deleteMany({}),
+    Organization.deleteMany({}),
+  ]);
+
+  console.log("  ✓ All records deleted.");
+  console.log("");
+  console.log("🌱 Seeding demo data...");
 
   const organization = await Organization.create({
     name: "Demo Property Group",
     slug: "demo-property-group",
     plan: "starter",
-    billingStatus: "inactive"
+    billingStatus: "inactive",
   });
 
   const passwordHash = await bcrypt.hash("demo12345", 12);
@@ -25,7 +51,7 @@ async function seed() {
     email: "demo@rentninja.ai",
     passwordHash,
     organizationId: organization._id,
-    role: "owner"
+    role: "owner",
   });
 
   const demoApplicants = [
@@ -50,7 +76,7 @@ async function seed() {
       communicationScore: 94,
       documentationScore: 96,
       notes: ["Income verified with recent pay stubs."],
-      status: "Screening" as const
+      status: "Screening" as const,
     },
     {
       name: "Marcus Allen",
@@ -72,8 +98,10 @@ async function seed() {
       timelineScore: 64,
       communicationScore: 70,
       documentationScore: 68,
-      notes: ["Voucher verified and inspection passed. Needs manual review because of mixed background indicators."],
-      status: "Review" as const
+      notes: [
+        "Voucher verified and inspection passed. Needs manual review because of mixed background indicators.",
+      ],
+      status: "Review" as const,
     },
     {
       name: "Olivia Brooks",
@@ -96,8 +124,8 @@ async function seed() {
       communicationScore: 55,
       documentationScore: 44,
       notes: ["Escalated to risk review."],
-      status: "Rejected" as const
-    }
+      status: "Rejected" as const,
+    },
   ];
 
   for (const applicant of demoApplicants) {
@@ -112,17 +140,24 @@ async function seed() {
       affordabilityRatio: scoring.affordabilityRatio,
       responsibleRent: scoring.responsibleRent,
       decision: scoring.decision,
-      redFlags: scoring.redFlags
+      redFlags: scoring.redFlags,
     });
+
+    console.log(`  ✓ Created applicant: ${applicant.name}`);
   }
 
-  console.log("Seed complete");
-  console.log("Demo login: demo@rentninja.ai / demo12345");
+  console.log("");
+  console.log("✅ Seed complete.");
+  console.log("");
+  console.log("  Demo login credentials:");
+  console.log("    Email    : demo@rentninja.ai");
+  console.log("    Password : demo12345");
+  console.log("");
 }
 
 seed()
   .then(() => process.exit(0))
   .catch((error) => {
-    console.error(error);
+    console.error("❌ Seed failed:", error);
     process.exit(1);
   });

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { constructStripeEvent } from "@/lib/billing";
 import { dbConnect } from "@/lib/mongodb";
+import { logger } from "@/lib/logger";
 import Organization from "@/models/Organization";
 import ProcessedWebhook from "@/models/ProcessedWebhook";
 
@@ -38,6 +39,10 @@ export async function POST(request: Request) {
   try {
     event = constructStripeEvent(rawBody, signature);
   } catch (error) {
+    logger.warn("Stripe webhook: signature verification failed", {
+      error,
+    });
+
     return NextResponse.json(
       {
         message:
@@ -49,17 +54,25 @@ export async function POST(request: Request) {
     );
   }
 
+  logger.info("Stripe webhook: event received", {
+    eventType: event.type,
+    eventId: event.id,
+  });
+
   // Step 3: Connect to database
   await dbConnect();
 
-  // Step 4: Check for duplicate event — Stripe can deliver the same event multiple times.
-  // Using stripeEventId from Stripe's unique event identifier (evt_...).
-  // The unique index on stripeEventId in MongoDB prevents race conditions.
+  // Step 4: Check for duplicate event
   const existingEvent = await ProcessedWebhook.findOne({
     stripeEventId: event.id,
   }).lean();
 
   if (existingEvent) {
+    logger.info("Stripe webhook: duplicate event skipped", {
+      eventId: event.id,
+      eventType: event.type,
+    });
+
     return NextResponse.json({ received: true });
   }
 
@@ -71,6 +84,11 @@ export async function POST(request: Request) {
         session.client_reference_id || session.metadata?.organizationId;
 
       if (!organizationId) {
+        logger.warn("Stripe webhook: missing organizationId in checkout", {
+          eventId: event.id,
+          sessionId: session.id,
+        });
+
         return NextResponse.json(
           { message: "Missing organizationId in checkout session." },
           { status: 400 },
@@ -81,6 +99,11 @@ export async function POST(request: Request) {
       const subscriptionId = session.subscription as string | undefined;
 
       if (!customerId || !subscriptionId) {
+        logger.warn(
+          "Stripe webhook: checkout session missing customer or subscription",
+          { eventId: event.id, sessionId: session.id },
+        );
+
         return NextResponse.json(
           { message: "Checkout session is missing customer or subscription." },
           { status: 400 },
@@ -96,25 +119,42 @@ export async function POST(request: Request) {
         },
       });
 
+      logger.info("Stripe webhook: subscription activated", {
+        eventId: event.id,
+        organizationId,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: subscriptionId,
+      });
+
       break;
     }
 
     case "customer.subscription.updated": {
       const subscription = event.data.object as Stripe.Subscription;
 
+      const billingStatus = mapSubscriptionStatus(subscription.status);
+      const plan =
+        subscription.status === "canceled" || subscription.status === "unpaid"
+          ? "starter"
+          : "pro";
+
       await Organization.findOneAndUpdate(
         { stripeSubscriptionId: subscription.id },
         {
           $set: {
-            billingStatus: mapSubscriptionStatus(subscription.status),
-            plan:
-              subscription.status === "canceled" ||
-              subscription.status === "unpaid"
-                ? "starter"
-                : "pro",
+            billingStatus,
+            plan,
           },
         },
       );
+
+      logger.info("Stripe webhook: subscription updated", {
+        eventId: event.id,
+        stripeSubscriptionId: subscription.id,
+        stripeStatus: subscription.status,
+        billingStatus,
+        plan,
+      });
 
       break;
     }
@@ -133,21 +173,37 @@ export async function POST(request: Request) {
         },
       );
 
+      logger.info("Stripe webhook: subscription cancelled", {
+        eventId: event.id,
+        stripeSubscriptionId: deletedSubscription.id,
+      });
+
       break;
     }
 
     default: {
-      // Stripe sends many event types (e.g. payment_intent.*, setup_intent.*).
-      // Unhandled events are acknowledged without action.
+      logger.info("Stripe webhook: unhandled event type", {
+        eventId: event.id,
+        eventType: event.type,
+      });
+
       break;
     }
   }
 
-  // Step 6: Record the event as processed (fire-and-forget — a write failure
-  // should not fail the whole request. The unique index on stripeEventId
-  // prevents duplicates on retry even if this write fails once.)
-  await ProcessedWebhook.create({ stripeEventId: event.id }).catch(() => {});
+  // Step 6: Record the event as processed
+  await ProcessedWebhook.create({ stripeEventId: event.id }).catch((error) => {
+    logger.warn("Stripe webhook: failed to record processed event", {
+      eventId: event.id,
+      error,
+    });
+  });
 
   // Step 7: Always acknowledge receipt with 200
+  logger.info("Stripe webhook: event processed", {
+    eventId: event.id,
+    eventType: event.type,
+  });
+
   return NextResponse.json({ received: true });
 }

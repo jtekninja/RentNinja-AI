@@ -1,5 +1,6 @@
 import { Types } from "mongoose";
 import AuditLog from "@/models/AuditLog";
+import { logger } from "@/lib/logger";
 
 type AuditLogInput = {
   organizationId: string;
@@ -18,7 +19,9 @@ export async function recordAuditLog(input: AuditLogInput) {
   try {
     await AuditLog.create({
       organizationId: new Types.ObjectId(input.organizationId),
-      actorUserId: input.actorUserId ? new Types.ObjectId(input.actorUserId) : null,
+      actorUserId: input.actorUserId
+        ? new Types.ObjectId(input.actorUserId)
+        : null,
       actorName: input.actorName || "",
       actorEmail: input.actorEmail || "",
       action: input.action,
@@ -26,9 +29,14 @@ export async function recordAuditLog(input: AuditLogInput) {
       entityId: input.entityId || "",
       level: input.level || "info",
       message: input.message,
-      metadata: input.metadata || {}
+      metadata: input.metadata || {},
     });
   } catch (error) {
-    console.error("Failed to record audit log", error);
+    logger.error("Audit log write failed", {
+      action: input.action,
+      entityType: input.entityType,
+      organizationId: input.organizationId,
+      error,
+    });
   }
 }

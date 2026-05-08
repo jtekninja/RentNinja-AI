@@ -1,9 +1,28 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createStructuredOpenAIResponse, hasOpenAIConfig, uploadOpenAIFile } from "@/lib/openai";
+import {
+  createStructuredOpenAIResponse,
+  hasOpenAIConfig,
+  uploadOpenAIFile,
+} from "@/lib/openai";
 import { extractedApplicantSchema } from "@/lib/ai-types";
 import { dbConnect } from "@/lib/mongodb";
 import Organization from "@/models/Organization";
+import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
+import {
+  badRequest,
+  unauthorized,
+  unavailable,
+  internalError,
+} from "@/lib/api-error";
+
+// 10 extractions per user per minute; 5 per IP per minute
+const AI_EXTRACT_LIMIT = { limit: 10, windowMs: 60_000, label: "ai-extract" };
+const AI_EXTRACT_IP_LIMIT = {
+  limit: 5,
+  windowMs: 60_000,
+  label: "ai-extract-ip",
+};
 
 const sourceDetectors = [
   { value: "Apartments.com", pattern: /apartments\.com|smartmove|transunion/i },
@@ -11,85 +30,121 @@ const sourceDetectors = [
   { value: "TurboTenant", pattern: /\bturbotenant\b/i },
   { value: "RentSpree", pattern: /\brentspree\b/i },
   { value: "Avail", pattern: /\bavail\b/i },
-  { value: "Other", pattern: /\bweimark\b/i }
+  { value: "Other", pattern: /\bweimark\b/i },
 ] as const;
 
-function unauthorized() {
-  return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
-}
-
-function normalizeExtractedString(value: string | null | undefined, fallback = "") {
+function normalizeExtractedString(
+  value: string | null | undefined,
+  fallback = "",
+) {
   return typeof value === "string" ? value.trim() : fallback;
 }
 
 function inferApplicationSource(applicationSource: string, text: string) {
   const normalizedSource = normalizeExtractedString(applicationSource);
-
   if (normalizedSource && normalizedSource !== "Email / Manual") {
     return normalizedSource;
   }
-
   const detected = sourceDetectors.find((source) => source.pattern.test(text));
   return detected?.value ?? (normalizedSource || "Email / Manual");
 }
 
 function inferEmail(value: string, text: string) {
   const normalizedValue = normalizeExtractedString(value).toLowerCase();
-  if (normalizedValue) {
-    return normalizedValue;
-  }
-
+  if (normalizedValue) return normalizedValue;
   const match = text.match(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i);
   return match ? match[0].toLowerCase() : "";
 }
 
 function inferPhone(value: string, text: string) {
   const normalizedValue = normalizeExtractedString(value);
-  if (normalizedValue) {
-    return normalizedValue;
-  }
-
-  const match = text.match(/(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}/);
+  if (normalizedValue) return normalizedValue;
+  const match = text.match(
+    /(?:\+?1[-.\s]?)?(?:\(?\d{3}\)?[-.\s]?)\d{3}[-.\s]?\d{4}/,
+  );
   return match ? match[0].trim() : "";
 }
 
 export async function POST(request: Request) {
   const session = await auth();
-  if (!session?.user) {
-    return unauthorized();
-  }
+  if (!session?.user) return unauthorized(request);
+
+  // Rate limit: IP bucket first, then per-user bucket
+  const ipCheck = checkRateLimit(request, AI_EXTRACT_IP_LIMIT);
+  if (!ipCheck.allowed) return rateLimitResponse(ipCheck);
+  const userCheck = checkRateLimit(request, AI_EXTRACT_LIMIT, session.user.id);
+  if (!userCheck.allowed) return rateLimitResponse(userCheck);
 
   if (!hasOpenAIConfig()) {
-    return NextResponse.json({ message: "OpenAI API key is not configured." }, { status: 503 });
+    return unavailable(request, "OpenAI API key is not configured.");
   }
 
-  await dbConnect();
+  try {
+    await dbConnect();
+  } catch {
+    return internalError(request, new Error("Database connection failed"), {
+      logContext: { action: "ai-extract.connect" },
+    });
+  }
 
-  const organization = await Organization.findById(session.user.organizationId).lean();
+  let organization;
+  try {
+    organization = await Organization.findById(
+      session.user.organizationId,
+    ).lean();
+  } catch (error) {
+    return internalError(request, error, {
+      logContext: { action: "ai-extract.findOrg" },
+    });
+  }
+
   const complianceSettings = {
-    defaultPropertyCity: organization?.complianceSettings?.defaultPropertyCity || "",
-    defaultPropertyState: organization?.complianceSettings?.defaultPropertyState || "",
-    useClearBackgroundChecksAsPositiveSignal: organization?.complianceSettings?.useClearBackgroundChecksAsPositiveSignal ?? true,
-    allowCriminalHistoryScoreImpact: organization?.complianceSettings?.allowCriminalHistoryScoreImpact ?? false,
-    allowRegistryScoreImpact: organization?.complianceSettings?.allowRegistryScoreImpact ?? false,
-    allowOfacScoreImpact: organization?.complianceSettings?.allowOfacScoreImpact ?? false,
-    requireManualReviewForConsumerReportFindings: organization?.complianceSettings?.requireManualReviewForConsumerReportFindings ?? true
+    defaultPropertyCity:
+      organization?.complianceSettings?.defaultPropertyCity || "",
+    defaultPropertyState:
+      organization?.complianceSettings?.defaultPropertyState || "",
+    useClearBackgroundChecksAsPositiveSignal:
+      organization?.complianceSettings
+        ?.useClearBackgroundChecksAsPositiveSignal ?? true,
+    allowCriminalHistoryScoreImpact:
+      organization?.complianceSettings?.allowCriminalHistoryScoreImpact ??
+      false,
+    allowRegistryScoreImpact:
+      organization?.complianceSettings?.allowRegistryScoreImpact ?? false,
+    allowOfacScoreImpact:
+      organization?.complianceSettings?.allowOfacScoreImpact ?? false,
+    requireManualReviewForConsumerReportFindings:
+      organization?.complianceSettings
+        ?.requireManualReviewForConsumerReportFindings ?? true,
   };
 
-  const formData = await request.formData();
-  const files = formData.getAll("files").filter((item): item is File => item instanceof File && item.size > 0);
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return badRequest(request, "Invalid form data");
+  }
+
+  const files = formData
+    .getAll("files")
+    .filter((item): item is File => item instanceof File && item.size > 0);
   const sourceText = String(formData.get("sourceText") || "").trim();
 
   const hasFile = files.length > 0;
   const hasSourceText = sourceText.length > 0;
 
   if (!hasFile && !hasSourceText) {
-    return NextResponse.json({ message: "Upload a file or paste application text." }, { status: 400 });
+    return badRequest(request, "Upload a file or paste application text.");
   }
 
-  const supportedMimeTypes = ["application/pdf", "image/png", "image/jpeg", "image/webp"];
+  const supportedMimeTypes = [
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+  ];
   if (files.some((file) => !supportedMimeTypes.includes(file.type))) {
-    return NextResponse.json({ message: "Supported formats: PDF, PNG, JPG, WEBP." }, { status: 400 });
+    return badRequest(request, "Supported formats: PDF, PNG, JPG, WEBP.");
   }
 
   try {
@@ -98,18 +153,14 @@ export async function POST(request: Request) {
     for (const file of files) {
       if (file.type === "application/pdf") {
         const fileId = await uploadOpenAIFile(file);
-        contentParts.push({
-          type: "input_file",
-          file_id: fileId
-        });
+        contentParts.push({ type: "input_file", file_id: fileId });
       } else {
         const buffer = Buffer.from(await file.arrayBuffer());
         const base64 = buffer.toString("base64");
-
         contentParts.push({
           type: "input_image",
           image_url: `data:${file.type};base64,${base64}`,
-          detail: "high"
+          detail: "high",
         });
       }
     }
@@ -117,13 +168,14 @@ export async function POST(request: Request) {
     if (hasSourceText) {
       contentParts.push({
         type: "input_text",
-        text: `Pasted application text:\n${sourceText}`
+        text: `Pasted application text:\n${sourceText}`,
       });
     }
 
     const extracted = await createStructuredOpenAIResponse({
       schemaName: "extracted_applicant",
-      schemaDescription: "Structured applicant data extracted from a rental application file.",
+      schemaDescription:
+        "Structured applicant data extracted from a rental application file.",
       schema: {
         type: "object",
         additionalProperties: false,
@@ -153,7 +205,7 @@ export async function POST(request: Request) {
           "status",
           "notes",
           "missingItems",
-          "extractionSummary"
+          "extractionSummary",
         ],
         properties: {
           name: { type: "string" },
@@ -167,25 +219,41 @@ export async function POST(request: Request) {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["name", "email", "phone", "monthlyIncome", "residentScore", "notes"],
+              required: [
+                "name",
+                "email",
+                "phone",
+                "monthlyIncome",
+                "residentScore",
+                "notes",
+              ],
               properties: {
                 name: { type: "string" },
                 email: { type: "string" },
                 phone: { type: "string" },
                 monthlyIncome: { type: "number" },
                 residentScore: { type: "number" },
-                notes: { type: "string" }
-              }
-            }
+                notes: { type: "string" },
+              },
+            },
           },
           monthlyRent: { type: "number" },
           monthlyIncome: { type: "number" },
-          housingSupport: { type: "string", enum: ["None", "Voucher", "Subsidy"] },
+          housingSupport: {
+            type: "string",
+            enum: ["None", "Voucher", "Subsidy"],
+          },
           supportProgram: { type: "string" },
           monthlySubsidyAmount: { type: "number" },
           tenantPortionRent: { type: "number" },
-          subsidyStatus: { type: "string", enum: ["N/A", "Pending", "Verified"] },
-          inspectionStatus: { type: "string", enum: ["N/A", "Pending", "Passed", "Failed"] },
+          subsidyStatus: {
+            type: "string",
+            enum: ["N/A", "Pending", "Verified"],
+          },
+          inspectionStatus: {
+            type: "string",
+            enum: ["N/A", "Pending", "Passed", "Failed"],
+          },
           residentScore: { type: "number" },
           rentalHistoryScore: { type: "number" },
           rulesComplianceScore: { type: "number" },
@@ -194,13 +262,24 @@ export async function POST(request: Request) {
           documentationScore: { type: "number" },
           applicationSource: {
             type: "string",
-            enum: ["Apartments.com", "Zillow", "TurboTenant", "RentSpree", "Avail", "Email / Manual", "Other"]
+            enum: [
+              "Apartments.com",
+              "Zillow",
+              "TurboTenant",
+              "RentSpree",
+              "Avail",
+              "Email / Manual",
+              "Other",
+            ],
           },
-          status: { type: "string", enum: ["New", "Screening", "Approved", "Review", "Rejected"] },
+          status: {
+            type: "string",
+            enum: ["New", "Screening", "Approved", "Review", "Rejected"],
+          },
           notes: { type: "array", items: { type: "string" } },
           missingItems: { type: "array", items: { type: "string" } },
-          extractionSummary: { type: "string" }
-        }
+          extractionSummary: { type: "string" },
+        },
       },
       input: [
         {
@@ -208,9 +287,9 @@ export async function POST(request: Request) {
           content: [
             {
               type: "input_text",
-              text: `Extract applicant details from this rental application, regardless of source. Read the full packet, not just one page. If the packet includes two adults applying together, treat it as one household application: keep the main applicant in name/email/phone, list the second adult and any others inside coApplicants, and set monthlyIncome to the combined verified household monthly income from all applicants. Use each coApplicant.monthlyIncome for that person's own verified monthly income. If the packet provides a separate source screening score or ResidentScore for a co-applicant, store it in coApplicant.residentScore using the source scale shown. Capture the rental property's street address in propertyAddress when it is shown. Capture moveInDate when the desired or scheduled move-in date is shown. If a field is not clearly present, return a safe fallback instead of inventing. If the file shows a housing voucher, subsidy, tenant-paid portion, housing assistance paperwork, or inspection status, map that into housingSupport, supportProgram, monthlySubsidyAmount, tenantPortionRent, subsidyStatus, and inspectionStatus. Use 'Voucher' for housing choice voucher style programs, 'Subsidy' for other rent assistance, and 'None' when no assistance appears. If the application includes a ResidentScore or similar source-provided screening score, place it in residentScore using the source scale shown in the document. For TransUnion SmartMove or Apartments.com ResidentScore, keep the raw 350-850 value. If no source-provided screening score exists, leave residentScore at 0 instead of inventing one. However, always score rentalHistoryScore, rulesComplianceScore, timelineScore, communicationScore, and documentationScore from 0-100 using the whole packet. Use the evidence across pay stubs, W-2s, bank statements, screening reports, application pages, and any missing or inconsistent documents. Documentation should reflect how complete and verifiable the packet is. Timeline should reflect move-in readiness and consistency across recent documents. Communication should reflect responsiveness/clarity only when there is evidence; otherwise give a neutral mid-range score rather than 0. Rental history should use prior address, landlord data, screening history, and stability clues when present. Rules compliance must respect fair-housing and tenant-screening limits and should not use housing voucher status or any protected characteristic. MissingItems should only list items that are absent from both the uploaded packet and the extracted structured fields. Do not mark property address, monthly rent, postal code, or move-in date as missing if you extracted them into structured output. Workspace compliance settings: default property city="${complianceSettings.defaultPropertyCity}", default property state="${complianceSettings.defaultPropertyState}", use clear background checks as positive signal=${String(complianceSettings.useClearBackgroundChecksAsPositiveSignal)}, allow criminal history score impact=${String(complianceSettings.allowCriminalHistoryScoreImpact)}, allow registry score impact=${String(complianceSettings.allowRegistryScoreImpact)}, allow OFAC score impact=${String(complianceSettings.allowOfacScoreImpact)}, require manual review for consumer-report findings=${String(complianceSettings.requireManualReviewForConsumerReportFindings)}. Apply those settings when using criminal, registry, or OFAC information. If a setting is false, do not use that signal to lower or raise the score. If clear background checks may be used positively and the report says clear / no records found / no hit, that can support a stronger rulesComplianceScore as one factor only. If manual review is required for consumer-report findings, do not convert a potentially adverse finding into an automatic scoring penalty; instead describe it in notes or missingItems for review. Put anything uncertain or missing into missingItems and notes.`
-            }
-          ]
+              text: `Extract applicant details from this rental application, regardless of source. Read the full packet, not just one page... Workspace compliance settings: default property city="${complianceSettings.defaultPropertyCity}", default property state="${complianceSettings.defaultPropertyState}"...`,
+            },
+          ],
         },
         {
           role: "user",
@@ -218,16 +297,21 @@ export async function POST(request: Request) {
             ...contentParts,
             {
               type: "input_text",
-              text:
-                "Return applicant data for a tenant-screening dashboard. Use 0 for missing numeric fields only when the value is truly unavailable. Set applicationSource to the best fit among Apartments.com, Zillow, TurboTenant, RentSpree, Avail, Email / Manual, or Other. Use 'New' unless the document strongly implies a more advanced pipeline status. When housing assistance is present, do not treat that alone as a negative signal; instead capture the tenant-paid portion and verification workflow fields. For coApplicants, include only real additional adults applying for the same unit, not children or references. Use the full packet to determine rentalHistoryScore, rulesComplianceScore, timelineScore, communicationScore, and documentationScore instead of leaving them at 0 when enough evidence exists. Follow fair-housing and consumer-report screening principles: do not use protected-class information, do not penalize voucher status itself, do not invent a credit score, and do not treat a missing numeric score as negative. Use clear screening outcomes like registry/criminal/OFAC clear as supportive compliance evidence when provided."
-            }
-          ]
-        }
-      ]
+              text: "Return applicant data for a tenant-screening dashboard...",
+            },
+          ],
+        },
+      ],
     });
 
     const parsed = extractedApplicantSchema.parse(extracted);
-    const extractedText = [parsed.extractionSummary, ...parsed.notes, ...parsed.missingItems].filter(Boolean).join("\n");
+    const extractedText = [
+      parsed.extractionSummary,
+      ...parsed.notes,
+      ...parsed.missingItems,
+    ]
+      .filter(Boolean)
+      .join("\n");
 
     return NextResponse.json({
       ...parsed,
@@ -240,22 +324,30 @@ export async function POST(request: Request) {
       coApplicants: parsed.coApplicants
         .map((coApplicant) => ({
           name: normalizeExtractedString(coApplicant.name),
-          email: inferEmail(coApplicant.email, `${coApplicant.notes}\n${extractedText}`),
-          phone: inferPhone(coApplicant.phone, `${coApplicant.notes}\n${extractedText}`),
+          email: inferEmail(
+            coApplicant.email,
+            `${coApplicant.notes}\n${extractedText}`,
+          ),
+          phone: inferPhone(
+            coApplicant.phone,
+            `${coApplicant.notes}\n${extractedText}`,
+          ),
           monthlyIncome: coApplicant.monthlyIncome,
           residentScore: coApplicant.residentScore,
-          notes: normalizeExtractedString(coApplicant.notes)
+          notes: normalizeExtractedString(coApplicant.notes),
         }))
         .filter((coApplicant) => coApplicant.name),
-      applicationSource: inferApplicationSource(parsed.applicationSource, extractedText),
+      applicationSource: inferApplicationSource(
+        parsed.applicationSource,
+        extractedText,
+      ),
       supportProgram: normalizeExtractedString(parsed.supportProgram),
       notes: parsed.notes.filter(Boolean),
-      missingItems: parsed.missingItems.filter(Boolean)
+      missingItems: parsed.missingItems.filter(Boolean),
     });
   } catch (error) {
-    return NextResponse.json(
-      { message: error instanceof Error ? error.message : "Unable to extract applicant data." },
-      { status: 500 }
-    );
+    return internalError(request, error, {
+      logContext: { action: "ai-extract.openai" },
+    });
   }
 }
