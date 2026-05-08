@@ -30,12 +30,19 @@ type DashboardShellProps = {
     role?: "owner" | "member";
   };
   billingEnabled: boolean;
+  addressLookupEnabled: boolean;
 };
 
 type DecisionFilter = "All" | "Strong" | "Review" | "Risk";
 type SortValue = "newest" | "highest-score" | "highest-affordability";
 
-export function ApplicantDashboard({ initialApplicants, organization, user, billingEnabled }: DashboardShellProps) {
+export function ApplicantDashboard({
+  initialApplicants,
+  organization,
+  user,
+  billingEnabled,
+  addressLookupEnabled
+}: DashboardShellProps) {
   const [applicants, setApplicants] = useState(initialApplicants);
   const [query, setQuery] = useState("");
   const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>("All");
@@ -243,6 +250,7 @@ export function ApplicantDashboard({ initialApplicants, organization, user, bill
               onCancelEdit={() => setEditingApplicant(null)}
               defaultPropertyCity={organization?.complianceSettings.defaultPropertyCity ?? ""}
               defaultPropertyState={organization?.complianceSettings.defaultPropertyState ?? ""}
+              addressLookupEnabled={addressLookupEnabled}
             />
             {organization ? (
               <BillingCard

@@ -4,7 +4,7 @@
   "private": true,
   "description": "RentNinja AI - multi-tenant tenant screening SaaS built with Next.js, MongoDB Atlas, Auth.js, and Stripe-ready billing.",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",

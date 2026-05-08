@@ -102,6 +102,7 @@ type ApplicantFormProps = {
   onCancelEdit: () => void;
   defaultPropertyCity?: string;
   defaultPropertyState?: string;
+  addressLookupEnabled?: boolean;
 };
 
 type AddressSuggestion = {
@@ -127,7 +128,8 @@ export function ApplicantForm({
   onSubmit,
   onCancelEdit,
   defaultPropertyCity = "",
-  defaultPropertyState = ""
+  defaultPropertyState = "",
+  addressLookupEnabled = false
 }: ApplicantFormProps) {
   const [form, setForm] = useState<ApplicantFormValues>(() => buildEmptyForm(defaultPropertyCity, defaultPropertyState));
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
@@ -196,6 +198,12 @@ export function ApplicantForm({
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (addressLookupEnabled && form.propertyAddress.trim() && !form.propertyAddressConfirmed) {
+      setExtractMessage("Choose a real address suggestion before saving so the property is standardized correctly.");
+      return;
+    }
+
     const success = await onSubmit(form);
 
     if (success && !initialApplicant) {
@@ -209,6 +217,9 @@ export function ApplicantForm({
       setSelectedFiles([]);
       setSourceText("");
       setExtractMessage("");
+      setAddressSuggestions([]);
+      setAddressPending(false);
+      addressAbortRef.current?.abort();
       resetFileInput(fileInputRef.current);
     }
   }
@@ -298,7 +309,7 @@ export function ApplicantForm({
         propertyState: current.propertyState,
         propertyPostalCode: data.propertyPostalCode || current.propertyPostalCode,
         moveInDate: data.moveInDate || current.moveInDate,
-        propertyAddressConfirmed: Boolean(data.propertyAddress || current.propertyAddressConfirmed),
+        propertyAddressConfirmed: data.propertyAddress ? false : current.propertyAddressConfirmed,
         coApplicants: data.coApplicants.length > 0 ? data.coApplicants : current.coApplicants,
         applicationSource: data.applicationSource || current.applicationSource,
         monthlyRent: data.monthlyRent > 0 ? data.monthlyRent : current.monthlyRent,
@@ -491,6 +502,9 @@ export function ApplicantForm({
                   setForm((current) => ({
                     ...current,
                     propertyAddress: event.target.value,
+                    propertyCity: current.propertyAddressConfirmed ? "" : current.propertyCity,
+                    propertyState: current.propertyAddressConfirmed ? "" : current.propertyState,
+                    propertyPostalCode: current.propertyAddressConfirmed ? "" : current.propertyPostalCode,
                     propertyAddressConfirmed: false
                   }))
                 }
@@ -515,14 +529,22 @@ export function ApplicantForm({
                       className="block w-full border-b border-white/8 px-4 py-3 text-left transition hover:bg-white/8 last:border-b-0"
                       onClick={() => applyAddressSuggestion(suggestion)}
                     >
-                      <span className="block text-sm font-semibold text-white">{suggestion.address}</span>
-                      <span className="mt-1 block text-xs text-slate-300">{suggestion.formatted}</span>
+                      <span className="block text-sm font-semibold text-white">{suggestion.formatted}</span>
+                      <span className="mt-1 block text-xs text-slate-300">
+                        {[suggestion.city, suggestion.state, suggestion.postalCode].filter(Boolean).join(", ")}
+                      </span>
                     </button>
                   ))}
                 </div>
               ) : null}
-              {form.propertyAddress && !form.propertyAddressConfirmed ? (
+              {!addressLookupEnabled ? (
+                <p className="mt-2 text-xs text-slate-400">
+                  Real address lookup is unavailable until <code>MAPBOX_ACCESS_TOKEN</code> is configured. Manual entry will still save.
+                </p>
+              ) : form.propertyAddress && !form.propertyAddressConfirmed ? (
                 <p className="mt-2 text-xs text-amber-100">Choose one of the real address suggestions to confirm the property address.</p>
+              ) : form.propertyAddressConfirmed ? (
+                <p className="mt-2 text-xs text-emerald-100">Real address confirmed and standardized.</p>
               ) : null}
             </div>
           </Field>

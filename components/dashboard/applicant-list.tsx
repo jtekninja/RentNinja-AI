@@ -134,9 +134,6 @@ export function ApplicantList({ applicants, onEdit, onDelete }: ApplicantListPro
               {applicant.propertyAddress ? (
                 <p className="mt-1 text-sm text-slate-400">
                   Property: {applicant.propertyAddress}
-                  {[applicant.propertyCity, applicant.propertyState, applicant.propertyPostalCode].filter(Boolean).length > 0
-                    ? `, ${[applicant.propertyCity, applicant.propertyState, applicant.propertyPostalCode].filter(Boolean).join(", ")}`
-                    : ""}
                 </p>
               ) : null}
             </div>
