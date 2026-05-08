@@ -9,11 +9,14 @@ export const env = {
   openAiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
   mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || "",
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
-  stripeProPriceId: process.env.STRIPE_PRO_PRICE_ID || ""
+  stripeProPriceId: process.env.STRIPE_PRO_PRICE_ID || "",
+  stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
 };
 
 export function hasStripeConfig() {
-  return Boolean(env.stripeSecretKey && env.stripeProPriceId);
+  return Boolean(
+    env.stripeSecretKey && env.stripeProPriceId && env.stripeWebhookSecret,
+  );
 }
 
 export function hasMapboxConfig() {

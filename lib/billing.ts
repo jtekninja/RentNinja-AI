@@ -15,3 +15,19 @@ export function getStripe() {
   return stripeClient;
 }
 
+export function constructStripeEvent(
+  rawBody: string,
+  signature: string,
+): Stripe.Event {
+  if (!env.stripeWebhookSecret) {
+    throw new Error(
+      "STRIPE_WEBHOOK_SECRET is not configured. Set it to verify webhook events.",
+    );
+  }
+
+  return Stripe.webhooks.constructEvent(
+    rawBody,
+    signature,
+    env.stripeWebhookSecret,
+  );
+}
