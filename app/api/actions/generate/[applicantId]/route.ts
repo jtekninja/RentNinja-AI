@@ -10,6 +10,7 @@ import {
   computeGenerationHash,
   computePipelineStats,
 } from "@/lib/action-engine";
+import { computeHistoricalAccuracy } from "@/lib/feedback-engine";
 import type { ActionContext } from "@/lib/action-engine";
 import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
 import { recordAuditLog } from "@/lib/audit-log";
@@ -182,8 +183,17 @@ export async function POST(
     pipelineStats: computePipelineStats(applicantRecords),
   };
 
+  // Compute historical accuracy for confidence calibration
+  const historicalAccuracyMap = await computeHistoricalAccuracy(
+    session.user.organizationId,
+  );
+
   // Generate actions
-  const suggestions = generateActionsForApplicant(applicant, ctx);
+  const suggestions = generateActionsForApplicant(
+    applicant,
+    ctx,
+    historicalAccuracyMap,
+  );
 
   if (suggestions.length === 0) {
     return NextResponse.json({ actions: [] });

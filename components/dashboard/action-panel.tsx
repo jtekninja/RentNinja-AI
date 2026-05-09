@@ -23,6 +23,8 @@ interface ActionData {
   status: string;
   actedAt?: string;
   overrideReason?: string;
+  outcome?: string | null;
+  outcomeNote?: string | null;
 }
 
 interface ActionPanelProps {
@@ -116,6 +118,28 @@ export function ActionPanel({
     }
   }
 
+  async function handleFeedback(
+    actionId: string,
+    outcome: "positive" | "negative" | "neutral",
+    note?: string,
+  ) {
+    try {
+      const res = await fetch(`/api/actions/${actionId}/feedback`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outcome, outcomeNote: note }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setHistory((prev) =>
+          prev.map((h) => (h._id === actionId ? { ...h, ...updated } : h)),
+        );
+      }
+    } catch {
+      // silently fail — feedback is best-effort
+    }
+  }
+
   return (
     <div className="mt-3 border-t border-white/8 pt-3">
       <button
@@ -164,7 +188,7 @@ export function ActionPanel({
                 pending={actionPending === action._id}
                 onAccept={() => handleAction(action._id, "accepted")}
                 onSkip={() => handleAction(action._id, "skipped")}
-                onOverride={async (reason) =>
+                onOverride={async (reason, _actionTaken) =>
                   handleAction(action._id, "overridden", reason)
                 }
               />
@@ -176,7 +200,10 @@ export function ActionPanel({
               <p className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">
                 Action History ({history.length})
               </p>
-              <ActionHistoryList actions={history} />
+              <ActionHistoryList
+                actions={history}
+                onFeedback={handleFeedback}
+              />
             </div>
           ) : null}
         </div>
