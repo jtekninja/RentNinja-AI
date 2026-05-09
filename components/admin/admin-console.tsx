@@ -243,7 +243,7 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
               <label className="grid gap-2 text-sm text-slate-200">
                 <span>Workspace name</span>
                 <input
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
                   value={workspaceForm.name}
                   onChange={(event) => setWorkspaceForm((current) => ({ ...current, name: event.target.value }))}
                 />
@@ -252,30 +252,30 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
                 <p className="lg:col-span-2 text-xs uppercase tracking-[0.22em] text-[#f7b36d]">Business profile</p>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Legal / business name</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.businessProfile.legalName} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, legalName: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.businessProfile.legalName} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, legalName: event.target.value } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Support email</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.businessProfile.supportEmail} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, supportEmail: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.businessProfile.supportEmail} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, supportEmail: event.target.value } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Support phone</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.businessProfile.supportPhone} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, supportPhone: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.businessProfile.supportPhone} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, supportPhone: event.target.value } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Website</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.businessProfile.website} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, website: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.businessProfile.website} onChange={(event) => setWorkspaceForm((current) => ({ ...current, businessProfile: { ...current.businessProfile, website: event.target.value } }))} />
                 </label>
               </div>
               <div className="grid gap-4 rounded-[24px] border border-white/8 bg-black/15 p-4 lg:grid-cols-2">
                 <p className="lg:col-span-2 text-xs uppercase tracking-[0.22em] text-[#f7b36d]">Jurisdiction and compliance</p>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Default property city</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.complianceSettings.defaultPropertyCity} onChange={(event) => setWorkspaceForm((current) => ({ ...current, complianceSettings: { ...current.complianceSettings, defaultPropertyCity: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.complianceSettings.defaultPropertyCity} onChange={(event) => setWorkspaceForm((current) => ({ ...current, complianceSettings: { ...current.complianceSettings, defaultPropertyCity: event.target.value } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Default property state</span>
-                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.complianceSettings.defaultPropertyState} onChange={(event) => setWorkspaceForm((current) => ({ ...current, complianceSettings: { ...current.complianceSettings, defaultPropertyState: event.target.value } }))} />
+                  <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.complianceSettings.defaultPropertyState} onChange={(event) => setWorkspaceForm((current) => ({ ...current, complianceSettings: { ...current.complianceSettings, defaultPropertyState: event.target.value } }))} />
                 </label>
                 <div className="lg:col-span-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                   <ToggleCard
@@ -349,19 +349,19 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
                 <p className="lg:col-span-2 text-xs uppercase tracking-[0.22em] text-[#f7b36d]">Screening policy</p>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Minimum affordability ratio</span>
-                  <input type="number" step="0.1" min="1" max="10" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.screeningPolicy.minAffordabilityRatio} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, minAffordabilityRatio: Number(event.target.value) } }))} />
+                  <input type="number" step="0.1" min="1" max="10" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.screeningPolicy.minAffordabilityRatio} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, minAffordabilityRatio: Number(event.target.value) } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Minimum resident score</span>
-                  <input type="number" min="0" max="850" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.screeningPolicy.minResidentScore} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, minResidentScore: Number(event.target.value) } }))} />
+                  <input type="number" min="0" max="850" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.screeningPolicy.minResidentScore} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, minResidentScore: Number(event.target.value) } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Strong threshold</span>
-                  <input type="number" min="1" max="100" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.screeningPolicy.strongScoreThreshold} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, strongScoreThreshold: Number(event.target.value) } }))} />
+                  <input type="number" min="1" max="100" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.screeningPolicy.strongScoreThreshold} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, strongScoreThreshold: Number(event.target.value) } }))} />
                 </label>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Review threshold</span>
-                  <input type="number" min="1" max="100" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={workspaceForm.screeningPolicy.reviewScoreThreshold} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, reviewScoreThreshold: Number(event.target.value) } }))} />
+                  <input type="number" min="1" max="100" className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={workspaceForm.screeningPolicy.reviewScoreThreshold} onChange={(event) => setWorkspaceForm((current) => ({ ...current, screeningPolicy: { ...current.screeningPolicy, reviewScoreThreshold: Number(event.target.value) } }))} />
                 </label>
                 <div className="lg:col-span-2 grid gap-3 sm:grid-cols-3">
                   <ToggleCard
@@ -438,7 +438,7 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
                 </div>
                 <label className="grid gap-2 text-sm text-slate-200">
                   <span>Duplicate handling</span>
-                  <select className="w-full rounded-2xl border border-white/10 bg-[#12161e] px-4 py-3 text-white outline-none" value={workspaceForm.intakeSettings.duplicatePolicy} onChange={(event) => setWorkspaceForm((current) => ({ ...current, intakeSettings: { ...current.intakeSettings, duplicatePolicy: event.target.value as "block" | "warn" } }))}>
+                  <select className="w-full rounded-2xl border border-white/10 bg-[#12161e] px-4 py-3 text-base text-white outline-none" value={workspaceForm.intakeSettings.duplicatePolicy} onChange={(event) => setWorkspaceForm((current) => ({ ...current, intakeSettings: { ...current.intakeSettings, duplicatePolicy: event.target.value as "block" | "warn" } }))}>
                     <option value="block">Block duplicates</option>
                     <option value="warn">Warn only</option>
                   </select>
@@ -462,15 +462,15 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
             <form className="mt-5 grid gap-4 rounded-[24px] border border-white/8 bg-black/15 p-4 lg:grid-cols-2" onSubmit={createUser}>
               <label className="grid gap-2 text-sm text-slate-200">
                 <span>Name</span>
-                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={newUser.name} onChange={(event) => setNewUser((current) => ({ ...current, name: event.target.value }))} />
               </label>
               <label className="grid gap-2 text-sm text-slate-200">
                 <span>Email</span>
-                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={newUser.email} onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))} />
               </label>
               <label className="grid gap-2 text-sm text-slate-200">
                 <span>Username</span>
-                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none" value={newUser.username} onChange={(event) => setNewUser((current) => ({ ...current, username: event.target.value }))} />
+                <input className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none" value={newUser.username} onChange={(event) => setNewUser((current) => ({ ...current, username: event.target.value }))} />
               </label>
               <label className="grid gap-2 text-sm text-slate-200">
                 <div className="flex items-center justify-between gap-3">
@@ -485,14 +485,14 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
                 </div>
                 <input
                   type={showNewUserPassword ? "text" : "password"}
-                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none"
+                  className="w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none"
                   value={newUser.password}
                   onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))}
                 />
               </label>
               <label className="grid gap-2 text-sm text-slate-200 lg:col-span-2">
                 <span>Role</span>
-                <select className="w-full rounded-2xl border border-white/10 bg-[#12161e] px-4 py-3 text-white outline-none" value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as "owner" | "member" }))}>
+                <select className="w-full rounded-2xl border border-white/10 bg-[#12161e] px-4 py-3 text-base text-white outline-none" value={newUser.role} onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value as "owner" | "member" }))}>
                   <option value="member">Member</option>
                   <option value="owner">Owner</option>
                 </select>

@@ -20,36 +20,58 @@ export default async function HomePage() {
         <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[1.1fr,0.9fr] lg:py-12">
           <div className="space-y-7">
             <div className="space-y-4">
-              <p className="text-xs uppercase tracking-[0.38em] text-[#f7b36d]">RentNinja AI</p>
-              <h1 className="max-w-4xl text-5xl font-semibold leading-none tracking-tight text-white sm:text-7xl">
-                Automated tenant screening that helps landlords compare applicants and choose the best renter with confidence.
+              <p className="text-xs uppercase tracking-[0.38em] text-[#f7b36d]">
+                RentNinja AI
+              </p>
+              <h1 className="max-w-4xl text-3xl md:text-4xl lg:text-5xl font-semibold leading-none tracking-tight text-white">
+                Automated tenant screening that helps landlords compare
+                applicants and choose the best renter with confidence.
               </h1>
               <p className="max-w-2xl text-lg text-slate-200">
-                Score every applicant, rank the strongest tenants, flag risky files, track status from lead to lease,
-                and keep every property team&apos;s records organized inside one mobile-ready workspace.
+                Score every applicant, rank the strongest tenants, flag risky
+                files, track status from lead to lease, and keep every property
+                team&apos;s records organized inside one mobile-ready workspace.
               </p>
             </div>
 
             <div className="flex flex-wrap gap-3">
-              <Link href="/register" className={buttonLinkClasses("primary", "px-5 py-3")}>
+              <Link
+                href="/register"
+                className={buttonLinkClasses("primary", "px-5 py-3")}
+              >
                 Create Workspace
               </Link>
             </div>
 
             <p className="text-sm text-slate-300">
               Already have an account?{" "}
-              <Link href="/login" className="font-semibold text-white transition hover:text-[#f7b36d]">
+              <Link
+                href="/login"
+                className="font-semibold text-white transition hover:text-[#f7b36d]"
+              >
                 Sign in
               </Link>
             </p>
 
             <div className="grid gap-3 sm:grid-cols-3">
               {[
-                ["Best tenant ranking", "Automatically compare the whole applicant pool and push the strongest matches to the top."],
-                ["Red flag detection", "Spot affordability problems, weak credit, and incomplete files before approving a lease."],
-                ["Status tracking", "Move applicants from new lead to review, approval, and signed lease without losing the thread."]
+                [
+                  "Best tenant ranking",
+                  "Automatically compare the whole applicant pool and push the strongest matches to the top.",
+                ],
+                [
+                  "Red flag detection",
+                  "Spot affordability problems, weak credit, and incomplete files before approving a lease.",
+                ],
+                [
+                  "Status tracking",
+                  "Move applicants from new lead to review, approval, and signed lease without losing the thread.",
+                ],
               ].map(([title, body]) => (
-                <div key={title} className="rounded-[28px] border border-white/10 bg-white/5 p-4">
+                <div
+                  key={title}
+                  className="rounded-[28px] border border-white/10 bg-white/5 p-4"
+                >
                   <p className="text-sm font-semibold text-white">{title}</p>
                   <p className="mt-2 text-sm text-slate-300">{body}</p>
                 </div>
@@ -61,7 +83,9 @@ export default async function HomePage() {
             <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,rgba(247,179,109,0.2),transparent_36%)]" />
             <div className="relative grid gap-4">
               <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Live Pipeline Snapshot</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-300">
+                  Live Pipeline Snapshot
+                </p>
                 <div className="mt-4 grid grid-cols-3 gap-3">
                   <Metric label="Strong" value="28" tone="text-emerald-200" />
                   <Metric label="Review" value="11" tone="text-amber-100" />
@@ -72,27 +96,52 @@ export default async function HomePage() {
               <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Applicant Decision</p>
-                    <h2 className="mt-2 text-2xl font-semibold text-white">Nina Patel</h2>
+                    <p className="text-xs uppercase tracking-[0.24em] text-slate-300">
+                      Applicant Decision
+                    </p>
+                    <h2 className="mt-2 text-2xl font-semibold text-white">
+                      Nina Patel
+                    </h2>
                   </div>
                   <div className="rounded-full border border-emerald-400/20 bg-emerald-400/12 px-4 py-2 text-sm font-semibold text-emerald-100">
                     Strong
                   </div>
                 </div>
                 <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                  <Metric label="Total score" value="84 / 100" tone="text-white" />
-                  <Metric label="Affordability" value="3.6x rent" tone="text-white" />
+                  <Metric
+                    label="Total score"
+                    value="84 / 100"
+                    tone="text-white"
+                  />
+                  <Metric
+                    label="Affordability"
+                    value="3.6x rent"
+                    tone="text-white"
+                  />
                   <Metric label="Credit score" value="742" tone="text-white" />
-                  <Metric label="Lease status" value="Draft" tone="text-white" />
+                  <Metric
+                    label="Lease status"
+                    value="Draft"
+                    tone="text-white"
+                  />
                 </div>
               </div>
 
               <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-                <p className="text-xs uppercase tracking-[0.24em] text-slate-300">Why teams use it</p>
+                <p className="text-xs uppercase tracking-[0.24em] text-slate-300">
+                  Why teams use it
+                </p>
                 <ul className="mt-4 grid gap-3 text-sm text-slate-100">
-                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">Rank the best tenant in a crowded applicant pool</li>
-                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">Use automated scoring to make faster leasing decisions</li>
-                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">Keep every applicant, note, and decision inside one workspace</li>
+                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                    Rank the best tenant in a crowded applicant pool
+                  </li>
+                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                    Use automated scoring to make faster leasing decisions
+                  </li>
+                  <li className="rounded-2xl border border-white/8 bg-white/5 px-4 py-3">
+                    Keep every applicant, note, and decision inside one
+                    workspace
+                  </li>
                 </ul>
               </div>
             </div>
@@ -105,21 +154,35 @@ export default async function HomePage() {
   );
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone: string }) {
+function Metric({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+}) {
   return (
     <div className="rounded-[22px] border border-white/8 bg-white/5 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-slate-300">{label}</p>
+      <p className="text-xs uppercase tracking-[0.2em] text-slate-300">
+        {label}
+      </p>
       <p className={`mt-2 text-lg font-semibold ${tone}`}>{value}</p>
     </div>
   );
 }
 
-function buttonLinkClasses(variant: "primary" | "secondary" | "ghost", className?: string) {
+function buttonLinkClasses(
+  variant: "primary" | "secondary" | "ghost",
+  className?: string,
+) {
   return cn(
     "inline-flex items-center justify-center rounded-full px-4 py-2.5 text-sm font-semibold transition hover:-translate-y-0.5",
-    variant === "primary" && "bg-[#f7b36d] text-[#16181d] shadow-[0_14px_30px_rgba(247,179,109,0.22)]",
+    variant === "primary" &&
+      "bg-[#f7b36d] text-[#16181d] shadow-[0_14px_30px_rgba(247,179,109,0.22)]",
     variant === "secondary" && "bg-white/10 text-white ring-1 ring-white/10",
     variant === "ghost" && "bg-transparent text-white ring-1 ring-white/10",
-    className
+    className,
   );
 }

@@ -10,48 +10,58 @@ export default function RegisterPage() {
         <SiteHeader />
 
         <div className="mt-6 grid min-h-[calc(100vh-8rem)] overflow-hidden rounded-[38px] border border-white/10 bg-white/6 shadow-[0_28px_80px_rgba(0,0,0,0.3)] lg:grid-cols-[0.95fr,1.05fr]">
-        <section className="border-b border-white/10 bg-black/20 p-6 sm:p-8 lg:border-b-0 lg:border-r">
-          <div className="space-y-6">
-            <div className="space-y-4">
-              <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">Create Workspace</p>
-              <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
-                Start a workspace built to help you screen applicants and choose the best tenant faster.
-              </h1>
-              <p className="max-w-xl text-base text-slate-300">
-                Organize applications, compare renters, catch red flags early, and keep every leasing decision in one place.
+          <section className="border-b border-white/10 bg-black/20 p-6 sm:p-8 lg:border-b-0 lg:border-r">
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">
+                  Create Workspace
+                </p>
+                <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white">
+                  Start a workspace built to help you screen applicants and
+                  choose the best tenant faster.
+                </h1>
+                <p className="max-w-xl text-base text-slate-300">
+                  Organize applications, compare renters, catch red flags early,
+                  and keep every leasing decision in one place.
+                </p>
+              </div>
+
+              <div className="grid gap-3">
+                {[
+                  "Compare applicants in one organized workspace",
+                  "Catch red flags before approving a lease",
+                  "Track every applicant from inquiry to final decision",
+                ].map((item) => (
+                  <div
+                    key={item}
+                    className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200"
+                  >
+                    {item}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="flex items-center p-6 sm:p-8">
+            <div className="w-full space-y-6">
+              <div>
+                <p className="text-xs uppercase tracking-[0.28em] text-[#f7b36d]">
+                  Provision account
+                </p>
+                <h2 className="mt-2 text-3xl font-semibold text-white">
+                  Create RentNinja AI access
+                </h2>
+              </div>
+              <RegisterForm />
+              <p className="text-sm text-slate-300">
+                Already have an account?{" "}
+                <Link href="/login" className="font-semibold text-white">
+                  Sign in
+                </Link>
               </p>
             </div>
-
-            <div className="grid gap-3">
-              {[
-                "Compare applicants in one organized workspace",
-                "Catch red flags before approving a lease",
-                "Track every applicant from inquiry to final decision"
-              ].map((item) => (
-                <div key={item} className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200">
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section className="flex items-center p-6 sm:p-8">
-          <div className="w-full space-y-6">
-            <div>
-              <p className="text-xs uppercase tracking-[0.28em] text-[#f7b36d]">Provision account</p>
-              <h2 className="mt-2 text-3xl font-semibold text-white">Create RentNinja AI access</h2>
-            </div>
-            <RegisterForm />
-            <p className="text-sm text-slate-300">
-              Already have an account?{" "}
-              <Link href="/login" className="font-semibold text-white">
-                Sign in
-              </Link>
-            </p>
-          </div>
-        </section>
-
+          </section>
         </div>
 
         <SiteFooter />

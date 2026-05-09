@@ -11,7 +11,7 @@ export function RegisterForm() {
     name: "",
     organizationName: "",
     email: "",
-    password: ""
+    password: "",
   });
   const [pending, setPending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -25,7 +25,7 @@ export function RegisterForm() {
     const response = await fetch("/api/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form)
+      body: JSON.stringify(form),
     });
 
     const data = await response.json();
@@ -38,7 +38,7 @@ export function RegisterForm() {
     await signIn("credentials", {
       email: form.email,
       password: form.password,
-      callbackUrl: "/dashboard"
+      callbackUrl: "/dashboard",
     });
 
     router.refresh();
@@ -49,9 +49,11 @@ export function RegisterForm() {
       <label className="grid gap-2 text-sm text-slate-200">
         Your name
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           value={form.name}
-          onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, name: event.target.value }))
+          }
           placeholder="Jordan Rivera"
           required
         />
@@ -60,9 +62,14 @@ export function RegisterForm() {
       <label className="grid gap-2 text-sm text-slate-200">
         Organization
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           value={form.organizationName}
-          onChange={(event) => setForm((current) => ({ ...current, organizationName: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({
+              ...current,
+              organizationName: event.target.value,
+            }))
+          }
           placeholder="Rivera Property Group"
           required
         />
@@ -71,10 +78,12 @@ export function RegisterForm() {
       <label className="grid gap-2 text-sm text-slate-200">
         Email
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           type="email"
           value={form.email}
-          onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, email: event.target.value }))
+          }
           placeholder="owner@riveraproperties.com"
           required
         />
@@ -92,10 +101,12 @@ export function RegisterForm() {
           </button>
         </div>
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           type={showPassword ? "text" : "password"}
           value={form.password}
-          onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))}
+          onChange={(event) =>
+            setForm((current) => ({ ...current, password: event.target.value }))
+          }
           placeholder="At least 8 characters"
           minLength={8}
           required

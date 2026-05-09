@@ -5,135 +5,168 @@ const organizationSchema = new Schema(
     name: {
       type: String,
       required: true,
-      trim: true
+      trim: true,
     },
     slug: {
       type: String,
       required: true,
       unique: true,
-      lowercase: true
+      lowercase: true,
     },
     plan: {
       type: String,
       enum: ["starter", "pro"],
-      default: "starter"
+      default: "starter",
     },
     billingStatus: {
       type: String,
       enum: ["inactive", "trialing", "active", "past_due"],
-      default: "inactive"
+      default: "inactive",
     },
     stripeCustomerId: {
       type: String,
-      default: ""
+      default: "",
     },
     stripeSubscriptionId: {
       type: String,
-      default: ""
+      default: "",
     },
     businessProfile: {
       legalName: {
         type: String,
         default: "",
-        trim: true
+        trim: true,
       },
       supportEmail: {
         type: String,
         default: "",
         trim: true,
-        lowercase: true
+        lowercase: true,
       },
       supportPhone: {
         type: String,
         default: "",
-        trim: true
+        trim: true,
       },
       website: {
         type: String,
         default: "",
-        trim: true
-      }
+        trim: true,
+      },
     },
     complianceSettings: {
       defaultPropertyCity: {
         type: String,
         default: "NYC",
-        trim: true
+        trim: true,
       },
       defaultPropertyState: {
         type: String,
         default: "NY",
-        trim: true
+        trim: true,
       },
       useClearBackgroundChecksAsPositiveSignal: {
         type: Boolean,
-        default: true
+        default: true,
       },
       allowCriminalHistoryScoreImpact: {
         type: Boolean,
-        default: false
+        default: false,
       },
       allowRegistryScoreImpact: {
         type: Boolean,
-        default: false
+        default: false,
       },
       allowOfacScoreImpact: {
         type: Boolean,
-        default: false
+        default: false,
       },
       requireManualReviewForConsumerReportFindings: {
         type: Boolean,
-        default: true
-      }
+        default: true,
+      },
     },
     screeningPolicy: {
       minAffordabilityRatio: {
         type: Number,
-        default: 2.5
+        default: 2.5,
       },
       minResidentScore: {
         type: Number,
-        default: 560
+        default: 560,
       },
       strongScoreThreshold: {
         type: Number,
-        default: 80
+        default: 80,
       },
       reviewScoreThreshold: {
         type: Number,
-        default: 60
+        default: 60,
       },
       requireIncomeDocs: {
         type: Boolean,
-        default: true
+        default: true,
       },
       requireGovernmentId: {
         type: Boolean,
-        default: true
+        default: true,
       },
       requireLandlordReference: {
         type: Boolean,
-        default: true
-      }
+        default: true,
+      },
     },
     intakeSettings: {
       enabledSources: {
         type: [String],
-        default: ["Apartments.com", "Zillow", "TurboTenant", "RentSpree", "Avail", "Email / Manual", "Other"]
+        default: [
+          "Apartments.com",
+          "Zillow",
+          "TurboTenant",
+          "RentSpree",
+          "Avail",
+          "Email / Manual",
+          "Other",
+        ],
       },
       duplicatePolicy: {
         type: String,
         enum: ["block", "warn"],
-        default: "block"
-      }
-    }
+        default: "block",
+      },
+    },
+    automationSettings: {
+      autoStatusEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      autoStatusMinConfidence: {
+        type: Number,
+        default: 90,
+      },
+      autoApproveEnabled: {
+        type: Boolean,
+        default: false,
+      },
+      autoArchiveAfterDays: {
+        type: Number,
+        default: 90,
+      },
+      actionExpiryDays: {
+        type: Number,
+        default: 7,
+      },
+    },
   },
   {
-    timestamps: true
-  }
+    timestamps: true,
+  },
 );
 
-export type OrganizationDocument = InferSchemaType<typeof organizationSchema> & { _id: string };
-const Organization = models.Organization || model("Organization", organizationSchema);
+export type OrganizationDocument = InferSchemaType<
+  typeof organizationSchema
+> & { _id: string };
+const Organization =
+  models.Organization || model("Organization", organizationSchema);
 
 export default Organization;

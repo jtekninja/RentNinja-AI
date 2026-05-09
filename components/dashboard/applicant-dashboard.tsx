@@ -14,6 +14,8 @@ import {
   ApplicantList,
   type ApplicantRecord,
 } from "@/components/dashboard/applicant-list";
+import { PriorityFeed } from "@/components/dashboard/priority-feed";
+import { generateOperationsReport } from "@/lib/ai-operations";
 import { Logo } from "@/components/ui/logo";
 import type { ApplicantComparison } from "@/lib/ai-types";
 
@@ -260,6 +262,11 @@ export function ApplicantDashboard({
     [applicants],
   );
 
+  const opsReport = useMemo(
+    () => generateOperationsReport(applicants),
+    [applicants],
+  );
+
   const sectionTabs: { key: DashboardSection; label: string; icon: string }[] =
     [
       { key: "overview", label: "Overview", icon: "◉" },
@@ -400,8 +407,12 @@ export function ApplicantDashboard({
           </div>
         </header>
 
-        {/* ── Section-conditioned layout: single-col on mobile, 2-col on xl+ ── */}
+        {/* ── Section-conditioned layout ── */}
         <SummaryCards summary={summary} />
+
+        {(mobileSection === "overview" || mobileSection === "all") && (
+          <PriorityFeed items={opsReport.all} />
+        )}
 
         <div
           className={`grid gap-5 ${mobileSection === "all" ? "grid-cols-1" : "xl:grid-cols-[0.9fr,1.1fr]"}`}
@@ -447,13 +458,13 @@ export function ApplicantDashboard({
 
                 <div className="grid gap-3 sm:grid-cols-4">
                   <input
-                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
+                    className="rounded-full border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
                     placeholder="Search applicant"
                     value={query}
                     onChange={(event) => setQuery(event.target.value)}
                   />
                   <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
+                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
                     value={decisionFilter}
                     onChange={(event) =>
                       setDecisionFilter(event.target.value as DecisionFilter)
@@ -466,7 +477,7 @@ export function ApplicantDashboard({
                     ))}
                   </select>
                   <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
+                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
                     value={propertyFilter}
                     onChange={(event) => setPropertyFilter(event.target.value)}
                   >
@@ -477,7 +488,7 @@ export function ApplicantDashboard({
                     ))}
                   </select>
                   <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-2.5 text-sm text-white outline-none transition focus:border-[#f7b36d]/60"
+                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
                     value={sortBy}
                     onChange={(event) =>
                       setSortBy(event.target.value as SortValue)

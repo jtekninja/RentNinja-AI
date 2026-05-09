@@ -5,7 +5,7 @@ import { SiteFooter } from "@/components/marketing/site-footer";
 
 export const metadata: Metadata = {
   title: "Contact | RentNinja AI",
-  description: "Contact RentNinja AI and JTekNinja.com."
+  description: "Contact RentNinja AI and JTekNinja.com.",
 };
 
 export default function ContactPage() {
@@ -15,31 +15,49 @@ export default function ContactPage() {
         <SiteHeader />
 
         <section className="mt-8 rounded-[34px] border border-white/10 bg-white/5 p-6 sm:p-8">
-          <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">Contact</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-white sm:text-6xl">Talk to JTekNinja about RentNinja AI.</h1>
+          <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">
+            Contact
+          </p>
+          <h1 className="mt-4 text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white">
+            Talk to JTekNinja about RentNinja AI.
+          </h1>
           <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-            If you want to ask questions, request features, or talk about using RentNinja AI in your leasing workflow,
-            reach out directly.
+            If you want to ask questions, request features, or talk about using
+            RentNinja AI in your leasing workflow, reach out directly.
           </p>
 
           <div className="mt-8 grid gap-4 md:grid-cols-2">
             <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">Email</p>
-              <a href="mailto:jtekninja@gmail.com" className="mt-3 block text-2xl font-semibold text-white hover:text-[#f7b36d]">
+              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">
+                Email
+              </p>
+              <a
+                href="mailto:jtekninja@gmail.com"
+                className="mt-3 block text-2xl font-semibold text-white hover:text-[#f7b36d]"
+              >
                 jtekninja@gmail.com
               </a>
               <p className="mt-3 text-sm leading-6 text-slate-300">
-                Best for product questions, support requests, business inquiries, and feedback.
+                Best for product questions, support requests, business
+                inquiries, and feedback.
               </p>
             </div>
 
             <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">Next Steps</p>
+              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">
+                Next Steps
+              </p>
               <div className="mt-3 grid gap-3">
-                <Link href="/register" className="inline-flex items-center justify-center rounded-full bg-[#f7b36d] px-5 py-3 text-sm font-semibold text-[#16181d] shadow-[0_14px_30px_rgba(247,179,109,0.22)] transition hover:-translate-y-0.5">
+                <Link
+                  href="/register"
+                  className="inline-flex items-center justify-center rounded-full bg-[#f7b36d] px-5 py-3 text-sm font-semibold text-[#16181d] shadow-[0_14px_30px_rgba(247,179,109,0.22)] transition hover:-translate-y-0.5"
+                >
                   Create Workspace
                 </Link>
-                <Link href="/login" className="inline-flex items-center justify-center rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 transition hover:-translate-y-0.5">
+                <Link
+                  href="/login"
+                  className="inline-flex items-center justify-center rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 transition hover:-translate-y-0.5"
+                >
                   Sign in
                 </Link>
               </div>

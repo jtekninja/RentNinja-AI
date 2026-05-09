@@ -26,7 +26,7 @@ export function LoginForm() {
       identifier: normalizedIdentifier,
       password,
       redirect: false,
-      callbackUrl
+      callbackUrl,
     });
 
     if (result?.error) {
@@ -44,7 +44,7 @@ export function LoginForm() {
       <label className="grid gap-2 text-sm text-slate-200">
         Email or username
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           type="text"
           placeholder="akeso80 or owner@rentninja.ai"
           value={identifier}
@@ -70,7 +70,7 @@ export function LoginForm() {
           </button>
         </div>
         <input
-          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-white outline-none transition focus:border-[#f7b36d]/60"
+          className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
           type={showPassword ? "text" : "password"}
           placeholder="Enter your password"
           value={password}
