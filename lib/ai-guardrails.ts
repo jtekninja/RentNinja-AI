@@ -24,9 +24,8 @@ export const ALLOWED_SCORING_INPUTS = [
 export function validateScoringInputs(fieldsUsed: string[]): { valid: boolean; violations: string[] } {
   const violations: string[] = [];
   for (const field of fieldsUsed) {
-      if (PROTECTED_CHARACTERISTICS.some(pc => field.toLowerCase().includes(pc.toLowerCase()))) {
-        violations.push('Protected characteristic in scoring input: "'+field+'"');
-      }
+    if (PROTECTED_CHARACTERISTICS.some(pc => field.toLowerCase().includes(pc.toLowerCase()))) {
+      violations.push('Protected characteristic in scoring input: "'+field+'"');
     }
   }
   return { valid: violations.length === 0, violations };
@@ -62,6 +61,7 @@ export function evaluateAutomationSafety(action: AutomationAction, confidence: n
   const gate = SAFETY_GATES[action];
   return {
     canSuggest: confidence >= gate.suggestConfidenceMin,
+    canOneClick: confidence >= gate.oneClickConfidenceMin,
     reason: confidence < gate.suggestConfidenceMin ? 'Confidence '+confidence+'% below '+gate.suggestConfidenceMin+'% threshold for '+action+'.' : undefined,
   };
 }
