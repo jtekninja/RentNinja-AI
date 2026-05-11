@@ -17,10 +17,9 @@ These are gaps where the AI engine already knows the answer, but the UI doesn't 
 **Fix:** Batch-generate actions for all applicants on dashboard load. The engine can process all applicants in ~100ms for 20 applicants. Cache results. Show P0/P1 badges immediately without user click.
 
 **Implementation:**
-
 ```
 GET /api/actions/summary (new endpoint)
-→ Returns { totalPending, urgentCount, actionCount,
+→ Returns { totalPending, urgentCount, actionCount, 
             topActions: [{ applicantId, actionType, priority, title }] }
 → Hits action-engine for all applicants in one request
 → < 200ms total
@@ -97,7 +96,6 @@ These require new files or significant refactoring but transform the user's dail
 **Designed:** `docs/mobile-ai-workflows.md` — full design with bottom tab bar, swipe-to-act, bottom sheets, voice input, notifications.
 
 **Minimum viable fix (Phase 1):**
-
 1. Bottom tab bar: [Inbox] [Pipeline] [Search] [Copilot] [Menu]
 2. Inbox tab: priority feed as swipeable rows
 3. Pipeline tab: compact list with AI summaries, tap for bottom sheet
@@ -122,9 +120,8 @@ These require new files or significant refactoring but transform the user's dail
 **Current state:** Auto-resolve is designed (`docs/auto-resolve-engine.md`) but not implemented. Stale actions pile up. Rejected applicants stay visible forever. Info items clutter the feed.
 
 **Minimum viable fix (3 resolvers only — the highest impact ones):**
-
 1. `autoExpireStaleActions()` — close expired pending actions (100% confidence)
-2. `autoArchiveRejected()` — soft-delete rejected >30 days (100% confidence)
+2. `autoArchiveRejected()` — soft-delete rejected >30 days (100% confidence)  
 3. `autoDismissInfoItems()` — dismiss info untouched for 72h (95% confidence)
 4. `POST /api/cron/auto-resolve` — hourly cron trigger
 
@@ -138,8 +135,7 @@ These require new files or significant refactoring but transform the user's dail
 
 **Designed:** `docs/ai-memory-personalization.md` — TenantMemory model with application + lease + payment history.
 
-**Minimum viable fix:**
-
+**Minimum viable fix:** 
 1. On applicant creation, check `duplicateFingerprint` or email/phone for existing tenant record
 2. If found, show "🔄 Returning tenant — previously approved [date]" — with on-time payment count
 3. Store the match in a `tenantId` field on the applicant
@@ -155,7 +151,6 @@ These require new files or significant refactoring but transform the user's dail
 **Designed:** `docs/green-flag-intelligence.md` — 2 proposed NBA rules: `fast_track_approval` and `reconsider_risk_level`.
 
 **Minimum viable fix:** Add 1 rule to `lib/action-engine.ts`:
-
 ```typescript
 rule({
   id: "fast_track_eligible",
@@ -184,8 +179,7 @@ These fundamentally change how the user interacts with the app.
 
 **Designed:** `docs/ai-copilot-assistant.md` — 12 intent handlers, slide-over panel, suggestion chips, explainability.
 
-**Minimum viable fix:**
-
+**Minimum viable fix:** 
 1. `POST /api/copilot/query` — single endpoint accepting text queries
 2. `components/copilot/copilot-panel.tsx` — slide-over panel with text input
 3. Intent classification using existing OpenAI infrastructure
@@ -202,7 +196,6 @@ These fundamentally change how the user interacts with the app.
 **Designed:** `docs/ai-portfolio-insights.md` — Z-score anomalies, rolling average forecasts, WoW comparisons, AI narrative.
 
 **Minimum viable fix:**
-
 1. `models/PortfolioSnapshot.ts` + daily snapshot job
 2. `GET /api/portfolio/insights` — compute trends + anomalies + predictions
 3. Replace SummaryCards with SmartSummary component showing trends
@@ -218,7 +211,6 @@ These fundamentally change how the user interacts with the app.
 **Designed:** `docs/ai-memory-personalization.md` — UserPreferences, OrganizationLearningModel, TenantMemory.
 
 **Minimum viable fix:**
-
 1. `UserPreferences` model — tone defaults, filter defaults
 2. `learnTonePreference()` — track tone selections, auto-adjust defaults
 3. `getPersonalizedConfidence()` — boost/penalize NBA confidence based on accept/skip history
@@ -231,14 +223,14 @@ These fundamentally change how the user interacts with the app.
 
 ### Phase 0: Quick Wins (Week 1 — < 8 hours total)
 
-| #   | Task                                                                              | Time    | Impact                            |
-| --- | --------------------------------------------------------------------------------- | ------- | --------------------------------- |
-| 1   | Default sort to NBA priority (change one line: `useState<SortValue>("priority")`) | 10 min  | Urgent items always first         |
-| 2   | Condense hero header after first visit                                            | 1 hour  | Recovers 200px screen space       |
-| 3   | Show "Why?" inline on action cards (always visible icon)                          | 30 min  | Explainability always accessible  |
-| 4   | Add P0/P1 badge count to applicant cards (no click required)                      | 2 hours | Urgent visibility without toggles |
-| 5   | Move ApplicantForm to modal (FAB button)                                          | 2 hours | Reclaims 45% screen width         |
-| 6   | Compact applicant list (AI summary row, expand on click)                          | 2 hours | 800px → 70px per applicant        |
+| # | Task | Time | Impact |
+|---|---|---|---|
+| 1 | Default sort to NBA priority (change one line: `useState<SortValue>("priority")`) | 10 min | Urgent items always first |
+| 2 | Condense hero header after first visit | 1 hour | Recovers 200px screen space |
+| 3 | Show "Why?" inline on action cards (always visible icon) | 30 min | Explainability always accessible |
+| 4 | Add P0/P1 badge count to applicant cards (no click required) | 2 hours | Urgent visibility without toggles |
+| 5 | Move ApplicantForm to modal (FAB button) | 2 hours | Reclaims 45% screen width |
+| 6 | Compact applicant list (AI summary row, expand on click) | 2 hours | 800px → 70px per applicant |
 
 **Phase 0 impact:** Pipeline review goes from 30 seconds → 5 seconds. Urgent items are always visible. Screen real estate for operational content doubles.
 
@@ -246,14 +238,14 @@ These fundamentally change how the user interacts with the app.
 
 ### Phase 1: Core AI Experience (Week 2-3)
 
-| #   | Task                                                                                            | Time    | Dependencies       |
-| --- | ----------------------------------------------------------------------------------------------- | ------- | ------------------ |
-| 7   | `GET /api/actions/summary` — batch generate for all applicants                                  | 4 hours | Phase 0 #1         |
-| 8   | Push notifications for P0 (web push API)                                                        | 8 hours | Existing NBA rules |
-| 9   | `lib/auto-resolve.ts` — expire, archive, dismiss (3 resolvers)                                  | 6 hours | None               |
-| 10  | `lib/green-flags.ts` — detectVerifiedIncome, detectStrongPaymentHistory, detectStableEmployment | 4 hours | None               |
-| 11  | GreenFlagBadge + net assessment in applicant card                                               | 3 hours | #10                |
-| 12  | SmartSummary line replaces 6 metric cards                                                       | 2 hours | None               |
+| # | Task | Time | Dependencies |
+|---|---|---|---|
+| 7 | `GET /api/actions/summary` — batch generate for all applicants | 4 hours | Phase 0 #1 |
+| 8 | Push notifications for P0 (web push API) | 8 hours | Existing NBA rules |
+| 9 | `lib/auto-resolve.ts` — expire, archive, dismiss (3 resolvers) | 6 hours | None |
+| 10 | `lib/green-flags.ts` — detectVerifiedIncome, detectStrongPaymentHistory, detectStableEmployment | 4 hours | None |
+| 11 | GreenFlagBadge + net assessment in applicant card | 3 hours | #10 |
+| 12 | SmartSummary line replaces 6 metric cards | 2 hours | None |
 
 **Phase 1 impact:** 4/7 common action types auto-resolve. Positive signals are visible. Pipeline summary is one line instead of 6 cards.
 
@@ -261,14 +253,14 @@ These fundamentally change how the user interacts with the app.
 
 ### Phase 2: Mobile & Copilot (Week 4-6)
 
-| #   | Task                                                | Time    | Dependencies          |
-| --- | --------------------------------------------------- | ------- | --------------------- |
-| 13  | Mobile tab bar (Inbox/Pipeline/Search/Copilot/Menu) | 4 hours | None                  |
-| 14  | `components/mobile/swipeable-row.tsx`               | 3 hours | None                  |
-| 15  | `components/mobile/bottom-sheet.tsx`                | 3 hours | None                  |
-| 16  | `GET /api/mobile/summary`                           | 2 hours | Phase 1 #7            |
-| 17  | `POST /api/copilot/query` + `lib/copilot-engine.ts` | 8 hours | Existing OpenAI infra |
-| 18  | `components/copilot/copilot-panel.tsx`              | 4 hours | #17                   |
+| # | Task | Time | Dependencies |
+|---|---|---|---|
+| 13 | Mobile tab bar (Inbox/Pipeline/Search/Copilot/Menu) | 4 hours | None |
+| 14 | `components/mobile/swipeable-row.tsx` | 3 hours | None |
+| 15 | `components/mobile/bottom-sheet.tsx` | 3 hours | None |
+| 16 | `GET /api/mobile/summary` | 2 hours | Phase 1 #7 |
+| 17 | `POST /api/copilot/query` + `lib/copilot-engine.ts` | 8 hours | Existing OpenAI infra |
+| 18 | `components/copilot/copilot-panel.tsx` | 4 hours | #17 |
 
 **Phase 2 impact:** Mobile goes from frustrating to delightful. Voice/chat copilot provides natural language access to all systems.
 
@@ -276,15 +268,15 @@ These fundamentally change how the user interacts with the app.
 
 ### Phase 3: Intelligence & Memory (Week 7-10)
 
-| #   | Task                                                            | Time    | Dependencies |
-| --- | --------------------------------------------------------------- | ------- | ------------ |
-| 19  | `models/PortfolioSnapshot.ts` + daily snapshot                  | 4 hours | None         |
-| 20  | `GET /api/portfolio/insights` — trends + anomalies              | 6 hours | #19          |
-| 21  | `UserPreferences` model + PATCH API                             | 3 hours | None         |
-| 22  | `OrganizationLearningModel` — approval profile, action stats    | 6 hours | None         |
-| 23  | `TenantMemory` model — returning tenant recognition             | 8 hours | None         |
-| 24  | `getPersonalizedConfidence()` — boost action types user accepts | 4 hours | #21, #22     |
-| 25  | NBA `fast_track_approval` rule                                  | 2 hours | Phase 1 #10  |
+| # | Task | Time | Dependencies |
+|---|---|---|---|
+| 19 | `models/PortfolioSnapshot.ts` + daily snapshot | 4 hours | None |
+| 20 | `GET /api/portfolio/insights` — trends + anomalies | 6 hours | #19 |
+| 21 | `UserPreferences` model + PATCH API | 3 hours | None |
+| 22 | `OrganizationLearningModel` — approval profile, action stats | 6 hours | None |
+| 23 | `TenantMemory` model — returning tenant recognition | 8 hours | None |
+| 24 | `getPersonalizedConfidence()` — boost action types user accepts | 4 hours | #21, #22 |
+| 25 | NBA `fast_track_approval` rule | 2 hours | Phase 1 #10 |
 
 **Phase 3 impact:** App recognizes returning tenants, learns user preferences, adapts confidence scores, predicts portfolio trends, and proactively recommends fast-track approvals.
 
