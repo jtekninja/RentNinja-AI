@@ -8,33 +8,39 @@ const NAV_LINKS = [
   { href: "/about", label: "About" },
   { href: "/contact", label: "Contact" },
   { href: "/login", label: "Sign in" },
-  { href: "/register", label: "Get started" },
 ];
 
 export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="flex flex-wrap items-center justify-between gap-4 rounded-[30px] border border-white/10 bg-white/6 px-5 py-4">
+    <header className="flex min-h-[68px] items-center justify-between gap-4 rounded-[22px] border border-[#dfe6f2] bg-white/92 px-5 py-3 shadow-[0_18px_48px_rgba(30,48,82,0.1)] backdrop-blur-xl">
       <Logo href="/" />
-      <nav className="hidden md:flex flex-wrap items-center gap-4 text-sm font-semibold text-slate-200">
+      <nav className="hidden items-center gap-8 text-sm font-bold text-[#080d1f] md:flex">
         {NAV_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className="transition hover:text-white"
+            className="transition hover:text-[#ff4f16]"
           >
             {link.label}
           </Link>
         ))}
+        <Link
+          href="/register"
+          className="inline-flex min-h-[46px] items-center gap-2 rounded-2xl bg-[#ff4f16] px-5 text-sm font-bold text-white shadow-[0_14px_28px_rgba(255,79,22,0.28)] transition hover:-translate-y-0.5"
+        >
+          Get started
+          <span aria-hidden="true">-&gt;</span>
+        </Link>
       </nav>
       <button
         onClick={() => setMenuOpen(true)}
-        className="md:hidden p-2 -mr-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-slate-200 hover:text-white"
+        className="-mr-2 flex min-h-[44px] min-w-[44px] items-center justify-center p-2 text-[#080d1f] hover:text-[#ff4f16] md:hidden"
         aria-label="Open menu"
       >
         <svg
-          className="w-6 h-6"
+          className="h-6 w-6"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -50,31 +56,33 @@ export function SiteHeader() {
       {menuOpen && (
         <div className="fixed inset-0 z-50 md:hidden" role="dialog">
           <div
-            className="absolute inset-0 bg-black/60"
+            className="absolute inset-0 bg-[#0b1224]/35 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           />
-          <nav className="relative z-50 w-64 h-full bg-[#11161e] border-r border-white/10 flex flex-col p-4 overflow-y-auto">
-            <div className="flex items-center justify-between mb-6">
+          <nav className="relative z-50 flex h-full w-72 flex-col overflow-y-auto border-r border-[#dfe6f2] bg-white p-4 shadow-[0_28px_80px_rgba(30,48,82,0.18)]">
+            <div className="mb-6 flex items-center justify-between">
               <Logo href="/" />
               <button
                 onClick={() => setMenuOpen(false)}
-                className="p-2 text-gray-400 hover:text-white min-h-[44px] min-w-[44px]"
+                className="min-h-[44px] min-w-[44px] p-2 text-[#080d1f] hover:text-[#ff4f16]"
                 aria-label="Close menu"
               >
-                ✕
+                x
               </button>
             </div>
             <div className="space-y-1">
-              {NAV_LINKS.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="block px-3 py-3 rounded-lg text-sm font-medium text-gray-300 hover:bg-gray-800 hover:text-white min-h-[44px] flex items-center"
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {[...NAV_LINKS, { href: "/register", label: "Get started" }].map(
+                (link) => (
+                  <Link
+                    key={link.href}
+                    href={link.href}
+                    className="flex min-h-[44px] items-center rounded-lg px-3 py-3 text-sm font-bold text-[#080d1f] hover:bg-[#fff1ec] hover:text-[#ff4f16]"
+                    onClick={() => setMenuOpen(false)}
+                  >
+                    {link.label}
+                  </Link>
+                ),
+              )}
             </div>
           </nav>
         </div>

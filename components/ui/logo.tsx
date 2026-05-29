@@ -7,24 +7,24 @@ type LogoProps = {
 
 export function Logo({ href }: LogoProps) {
   const content = (
-    <div className="inline-flex items-center gap-3 sm:gap-4">
-      <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-white/10 bg-[#080b12] shadow-[0_14px_30px_rgba(0,0,0,0.28)] sm:h-[4.5rem] sm:w-[4.5rem]">
+    <div className="inline-flex items-center gap-2.5">
+      <div className="relative h-12 w-12 shrink-0 overflow-hidden rounded-full">
         <Image
-          src="/jtekninja-logo.png"
-          alt="JTekNinja logo"
-          width={1254}
-          height={1254}
+          src="/rentninja_ai_logo2_transparent.png"
+          alt="RentNinja AI logo"
+          width={485}
+          height={433}
           priority
-          className="absolute left-1/2 top-0 h-auto w-[115%] max-w-none -translate-x-1/2 object-cover object-top"
+          className="absolute left-1/2 top-0 h-auto w-[165%] max-w-none -translate-x-1/2"
         />
       </div>
-      <div className="min-w-0">
-        <p className="font-[var(--font-display)] text-xl font-semibold uppercase tracking-[0.12em] text-white sm:text-2xl">
-          <span className="text-[#ff9b1a]">JTek</span>Ninja
+      <div className="flex items-center gap-2">
+        <p className="font-[var(--font-display)] text-2xl font-black italic tracking-tight text-[#0b1224] sm:text-3xl">
+          Rent<span className="text-[#f0441a]">Ninja</span>
         </p>
-        <p className="text-[10px] uppercase tracking-[0.34em] text-[#f7b36d] sm:text-xs">
-          Build • Automate • Dominate
-        </p>
+        <span className="rounded-md border border-[#ff5a1f] px-1.5 py-0.5 text-xs font-bold text-[#ff4f16]">
+          AI
+        </span>
       </div>
     </div>
   );

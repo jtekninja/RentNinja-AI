@@ -168,7 +168,7 @@ export function ActionHistoryList({
             {expandedNoteId === action._id && !hasFeedback ? (
               <div className="w-full mt-2 flex items-center gap-2">
                 <input
-                  className="flex-1 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60"
+                  className="dark-field flex-1 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60"
                   placeholder="Optional note..."
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}

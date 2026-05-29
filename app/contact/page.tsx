@@ -1,7 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { SiteHeader } from "@/components/marketing/site-header";
-import { SiteFooter } from "@/components/marketing/site-footer";
+import {
+  LightPageFrame,
+  LightPanel,
+} from "@/components/marketing/light-page-frame";
 
 export const metadata: Metadata = {
   title: "Contact | RentNinja AI",
@@ -10,63 +12,57 @@ export const metadata: Metadata = {
 
 export default function ContactPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_right,rgba(247,179,109,0.18),transparent_26%),linear-gradient(180deg,#10131a_0%,#0b0e13_100%)]">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1200px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <SiteHeader />
+    <LightPageFrame>
+      <LightPanel>
+        <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
+          Contact
+        </p>
+        <h1 className="mt-4 max-w-5xl text-[2.35rem] font-black leading-[1.02] tracking-tight text-[#070d24] md:text-5xl lg:text-[3.2rem]">
+          Talk to JTekNinja about RentNinja AI.
+        </h1>
+        <p className="mt-5 max-w-3xl text-base leading-7 text-[#364154]">
+          If you want to ask questions, request features, or talk about using
+          RentNinja AI in your leasing workflow, reach out directly.
+        </p>
 
-        <section className="mt-8 rounded-[34px] border border-white/10 bg-white/5 p-6 sm:p-8">
-          <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">
-            Contact
-          </p>
-          <h1 className="mt-4 text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white">
-            Talk to JTekNinja about RentNinja AI.
-          </h1>
-          <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-300">
-            If you want to ask questions, request features, or talk about using
-            RentNinja AI in your leasing workflow, reach out directly.
-          </p>
+        <div className="mt-8 grid gap-5 md:grid-cols-2">
+          <div className="rounded-[22px] border border-[#dbe2ee] bg-white/88 p-5 shadow-[0_18px_40px_rgba(31,49,83,0.1)]">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
+              Email
+            </p>
+            <a
+              href="mailto:jtekninja@gmail.com"
+              className="mt-3 block text-2xl font-black text-[#071027] transition hover:text-[#ff4f16]"
+            >
+              jtekninja@gmail.com
+            </a>
+            <p className="mt-3 text-sm leading-6 text-[#364154]">
+              Best for product questions, support requests, business inquiries,
+              and feedback.
+            </p>
+          </div>
 
-          <div className="mt-8 grid gap-4 md:grid-cols-2">
-            <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">
-                Email
-              </p>
-              <a
-                href="mailto:jtekninja@gmail.com"
-                className="mt-3 block text-2xl font-semibold text-white hover:text-[#f7b36d]"
+          <div className="rounded-[22px] border border-[#dbe2ee] bg-white/88 p-5 shadow-[0_18px_40px_rgba(31,49,83,0.1)]">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
+              Next Steps
+            </p>
+            <div className="mt-4 grid gap-3">
+              <Link
+                href="/register"
+                className="inline-flex min-h-[50px] items-center justify-center rounded-2xl bg-[#ff4f16] px-6 text-base font-extrabold text-white shadow-[0_16px_30px_rgba(255,79,22,0.28)] transition hover:-translate-y-0.5"
               >
-                jtekninja@gmail.com
-              </a>
-              <p className="mt-3 text-sm leading-6 text-slate-300">
-                Best for product questions, support requests, business
-                inquiries, and feedback.
-              </p>
-            </div>
-
-            <div className="rounded-[28px] border border-white/10 bg-black/20 p-5">
-              <p className="text-sm uppercase tracking-[0.24em] text-[#f7b36d]">
-                Next Steps
-              </p>
-              <div className="mt-3 grid gap-3">
-                <Link
-                  href="/register"
-                  className="inline-flex items-center justify-center rounded-full bg-[#f7b36d] px-5 py-3 text-sm font-semibold text-[#16181d] shadow-[0_14px_30px_rgba(247,179,109,0.22)] transition hover:-translate-y-0.5"
-                >
-                  Create Workspace
-                </Link>
-                <Link
-                  href="/login"
-                  className="inline-flex items-center justify-center rounded-full bg-white/10 px-5 py-3 text-sm font-semibold text-white ring-1 ring-white/10 transition hover:-translate-y-0.5"
-                >
-                  Sign in
-                </Link>
-              </div>
+                Create Workspace
+              </Link>
+              <Link
+                href="/login"
+                className="inline-flex min-h-[50px] items-center justify-center rounded-2xl border border-[#dbe2ee] bg-white px-6 text-base font-extrabold text-[#071027] transition hover:-translate-y-0.5 hover:text-[#ff4f16]"
+              >
+                Sign in
+              </Link>
             </div>
           </div>
-        </section>
-
-        <SiteFooter />
-      </div>
-    </main>
+        </div>
+      </LightPanel>
+    </LightPageFrame>
   );
 }

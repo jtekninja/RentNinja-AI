@@ -44,7 +44,7 @@ export function OverrideDialog({
           Reason for override (optional):
         </label>
         <textarea
-          className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60 resize-none"
+          className="dark-field w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60 resize-none"
           placeholder="Why are you overriding this recommendation?"
           rows={2}
           value={reason}

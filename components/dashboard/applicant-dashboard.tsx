@@ -276,7 +276,7 @@ export function ApplicantDashboard({
     ];
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(247,179,109,0.18),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(92,174,255,0.14),transparent_24%),linear-gradient(180deg,#10131a_0%,#0b0e13_100%)]">
+    <div className="dark-form-scope rentninja-app-shell min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
         {/* ── Mobile section tabs (hidden on xl+) ── */}
         <div className="xl:hidden sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-5 px-4 sm:px-6 pt-3 pb-2 bg-[#0b0e13]/95 backdrop-blur">

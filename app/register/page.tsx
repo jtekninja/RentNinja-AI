@@ -1,71 +1,68 @@
 import Link from "next/link";
 import { RegisterForm } from "@/components/auth/register-form";
-import { SiteHeader } from "@/components/marketing/site-header";
-import { SiteFooter } from "@/components/marketing/site-footer";
+import {
+  LightPageFrame,
+  LightPanel,
+} from "@/components/marketing/light-page-frame";
+
+const benefits = [
+  "Compare applicants in one organized workspace",
+  "Catch red flags before approving a lease",
+  "Track every applicant from inquiry to final decision",
+];
 
 export default function RegisterPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_20%_20%,rgba(92,174,255,0.16),transparent_22%),radial-gradient(circle_at_top_right,rgba(247,179,109,0.18),transparent_24%),linear-gradient(180deg,#0f1319_0%,#090c11_100%)] px-4 py-5 sm:px-6 lg:px-8">
-      <div className="mx-auto flex min-h-screen w-full max-w-6xl flex-col">
-        <SiteHeader />
+    <LightPageFrame>
+      <LightPanel>
+        <div className="grid gap-8 lg:grid-cols-[0.95fr_1.05fr]">
+          <section>
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
+              Create Workspace
+            </p>
+            <h1 className="mt-4 max-w-4xl text-[2.35rem] font-black leading-[1.02] tracking-tight text-[#070d24] md:text-5xl lg:text-[3.2rem]">
+              Start a workspace built to help you screen applicants and choose
+              the best tenant faster.
+            </h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-[#364154]">
+              Organize applications, compare renters, catch red flags early,
+              and keep every leasing decision in one place.
+            </p>
 
-        <div className="mt-6 grid min-h-[calc(100vh-8rem)] overflow-hidden rounded-[38px] border border-white/10 bg-white/6 shadow-[0_28px_80px_rgba(0,0,0,0.3)] lg:grid-cols-[0.95fr,1.05fr]">
-          <section className="border-b border-white/10 bg-black/20 p-6 sm:p-8 lg:border-b-0 lg:border-r">
-            <div className="space-y-6">
-              <div className="space-y-4">
-                <p className="text-xs uppercase tracking-[0.34em] text-[#f7b36d]">
-                  Create Workspace
-                </p>
-                <h1 className="text-3xl md:text-4xl lg:text-5xl font-semibold tracking-tight text-white">
-                  Start a workspace built to help you screen applicants and
-                  choose the best tenant faster.
-                </h1>
-                <p className="max-w-xl text-base text-slate-300">
-                  Organize applications, compare renters, catch red flags early,
-                  and keep every leasing decision in one place.
-                </p>
-              </div>
-
-              <div className="grid gap-3">
-                {[
-                  "Compare applicants in one organized workspace",
-                  "Catch red flags before approving a lease",
-                  "Track every applicant from inquiry to final decision",
-                ].map((item) => (
-                  <div
-                    key={item}
-                    className="rounded-[24px] border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-200"
-                  >
-                    {item}
-                  </div>
-                ))}
-              </div>
+            <div className="mt-8 grid gap-3">
+              {benefits.map((item) => (
+                <div
+                  key={item}
+                  className="rounded-2xl border border-[#dbe2ee] bg-white/88 px-4 py-3 text-sm font-semibold text-[#364154] shadow-[0_12px_26px_rgba(31,49,83,0.06)]"
+                >
+                  {item}
+                </div>
+              ))}
             </div>
           </section>
 
-          <section className="flex items-center p-6 sm:p-8">
-            <div className="w-full space-y-6">
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#f7b36d]">
-                  Provision account
-                </p>
-                <h2 className="mt-2 text-3xl font-semibold text-white">
-                  Create RentNinja AI access
-                </h2>
-              </div>
+          <section className="rounded-[22px] border border-[#dbe2ee] bg-white/88 p-5 shadow-[0_18px_40px_rgba(31,49,83,0.1)]">
+            <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
+              Provision account
+            </p>
+            <h2 className="mt-3 text-3xl font-black text-[#071027]">
+              Create RentNinja AI access
+            </h2>
+            <div className="mt-6">
               <RegisterForm />
-              <p className="text-sm text-slate-300">
-                Already have an account?{" "}
-                <Link href="/login" className="font-semibold text-white">
-                  Sign in
-                </Link>
-              </p>
             </div>
+            <p className="mt-5 text-sm text-[#364154]">
+              Already have an account?{" "}
+              <Link
+                href="/login"
+                className="font-extrabold text-[#071027] transition hover:text-[#ff4f16]"
+              >
+                Sign in
+              </Link>
+            </p>
           </section>
         </div>
-
-        <SiteFooter />
-      </div>
-    </main>
+      </LightPanel>
+    </LightPageFrame>
   );
 }

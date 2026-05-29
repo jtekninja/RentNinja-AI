@@ -198,7 +198,7 @@ export function AdminConsole({ workspace, stats, users: initialUsers, activity, 
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(247,179,109,0.14),transparent_28%),radial-gradient(circle_at_80%_0%,rgba(92,174,255,0.12),transparent_24%),linear-gradient(180deg,#10131a_0%,#0b0e13_100%)]">
+    <div className="dark-form-scope rentninja-app-shell min-h-screen">
       <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
         <header className="rounded-[34px] border border-white/10 bg-white/6 px-5 py-5 shadow-[0_24px_70px_rgba(0,0,0,0.26)]">
           <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">

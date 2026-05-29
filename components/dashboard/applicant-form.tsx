@@ -429,7 +429,11 @@ export function ApplicantForm({
     }
 
     const query = form.propertyAddress.trim();
-    if (query.length < 4) {
+    if (
+      !addressLookupEnabled ||
+      form.propertyAddressConfirmed ||
+      query.length < 4
+    ) {
       addressAbortRef.current?.abort();
       setAddressSuggestions([]);
       setAddressPending(false);
@@ -473,7 +477,11 @@ export function ApplicantForm({
     }, 250);
 
     return () => window.clearTimeout(timeoutId);
-  }, [form.propertyAddress]);
+  }, [
+    addressLookupEnabled,
+    form.propertyAddress,
+    form.propertyAddressConfirmed,
+  ]);
 
   return (
     <section className="rounded-[32px] border border-white/10 bg-white/5 p-5">

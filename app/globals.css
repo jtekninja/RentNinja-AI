@@ -20,7 +20,9 @@ html {
 body {
   margin: 0;
   min-height: 100vh;
-  background: var(--background);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 246, 0.92), rgba(255, 230, 216, 0.74)),
+    url("/rentninja_background1.png") center / cover fixed;
   color: var(--foreground);
   font-family: var(--font-body), sans-serif;
 }
@@ -35,7 +37,6 @@ h6 {
 }
 
 a {
-  color: inherit;
   text-decoration: none;
 }
 
@@ -52,4 +53,122 @@ textarea {
 
 ::selection {
   background: rgba(247, 179, 109, 0.24);
+}
+
+.rentninja-scene {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background:
+    linear-gradient(110deg, rgba(255, 255, 255, 0.94) 0%, rgba(255, 247, 241, 0.82) 44%, rgba(255, 183, 137, 0.18) 100%),
+    url("/rentninja_background1.png") center / cover fixed;
+}
+
+.rentninja-scene::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: url("/rentninja_background1.png") center / cover no-repeat;
+  opacity: 0.72;
+}
+
+.rentninja-scene::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 249, 245, 0.8) 45%, rgba(255, 255, 255, 0.18) 100%),
+    radial-gradient(circle at 82% 35%, rgba(255, 107, 0, 0.22), transparent 28%);
+}
+
+.rentninja-glass {
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.58);
+  box-shadow: 0 24px 70px rgba(181, 78, 20, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.rentninja-app-shell {
+  background:
+    linear-gradient(180deg, rgba(16, 19, 26, 0.86), rgba(11, 14, 19, 0.94)),
+    url("/rentninja_background1.png") center / cover fixed;
+}
+
+.auth-field {
+  color: #071027 !important;
+  -webkit-text-fill-color: #071027 !important;
+  caret-color: #ff4f16;
+}
+
+.auth-field::placeholder {
+  color: #7b8494 !important;
+  -webkit-text-fill-color: #7b8494 !important;
+}
+
+.auth-field:-webkit-autofill,
+.auth-field:-webkit-autofill:hover,
+.auth-field:-webkit-autofill:focus {
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #071027 !important;
+}
+
+.light-form-scope input,
+.light-form-scope textarea,
+.light-form-scope select {
+  color: #071027 !important;
+  -webkit-text-fill-color: #071027 !important;
+  caret-color: #ff4f16;
+}
+
+.light-form-scope input::placeholder,
+.light-form-scope textarea::placeholder {
+  color: #7b8494 !important;
+  -webkit-text-fill-color: #7b8494 !important;
+}
+
+.light-form-scope input:-webkit-autofill,
+.light-form-scope input:-webkit-autofill:hover,
+.light-form-scope input:-webkit-autofill:focus,
+.light-form-scope textarea:-webkit-autofill,
+.light-form-scope textarea:-webkit-autofill:hover,
+.light-form-scope textarea:-webkit-autofill:focus,
+.light-form-scope select:-webkit-autofill,
+.light-form-scope select:-webkit-autofill:hover,
+.light-form-scope select:-webkit-autofill:focus {
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  -webkit-text-fill-color: #071027 !important;
+}
+
+.dark-form-scope input,
+.dark-form-scope textarea,
+.dark-form-scope select,
+.dark-field {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  caret-color: #ff4f16;
+}
+
+.dark-form-scope input::placeholder,
+.dark-form-scope textarea::placeholder,
+.dark-field::placeholder {
+  color: #94a3b8 !important;
+  -webkit-text-fill-color: #94a3b8 !important;
+}
+
+.dark-form-scope input:-webkit-autofill,
+.dark-form-scope input:-webkit-autofill:hover,
+.dark-form-scope input:-webkit-autofill:focus,
+.dark-form-scope textarea:-webkit-autofill,
+.dark-form-scope textarea:-webkit-autofill:hover,
+.dark-form-scope textarea:-webkit-autofill:focus,
+.dark-form-scope select:-webkit-autofill,
+.dark-form-scope select:-webkit-autofill:hover,
+.dark-form-scope select:-webkit-autofill:focus,
+.dark-field:-webkit-autofill,
+.dark-field:-webkit-autofill:hover,
+.dark-field:-webkit-autofill:focus {
+  box-shadow: 0 0 0 1000px #12161e inset !important;
+  -webkit-text-fill-color: #ffffff !important;
 }

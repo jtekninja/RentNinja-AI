@@ -1,4 +1,5 @@
 import { ApplicantDashboard } from "@/components/dashboard/applicant-dashboard";
+import { hasMapboxConfig } from "@/lib/env";
 
 export default function DashboardPage() {
   return (
@@ -7,7 +8,7 @@ export default function DashboardPage() {
       organization={null}
       user={{}}
       billingEnabled={false}
-      addressLookupEnabled={false}
+      addressLookupEnabled={hasMapboxConfig()}
     />
   );
 }
