@@ -1,27 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useDeferredValue, useMemo, useState } from "react";
+import { useState, useMemo, startTransition } from "react";
 import { signOut } from "next-auth/react";
-import { Button } from "@/components/ui/button";
-import { SummaryCards } from "@/components/dashboard/summary-cards";
-import { BillingCard } from "@/components/dashboard/billing-card";
-import {
-  ApplicantForm,
-  type ApplicantFormValues,
-} from "@/components/dashboard/applicant-form";
-import {
-  ApplicantList,
-  type ApplicantRecord,
-} from "@/components/dashboard/applicant-list";
-import { PriorityFeed } from "@/components/dashboard/priority-feed";
-import { generateOperationsReport } from "@/lib/ai-operations";
 import { Logo } from "@/components/ui/logo";
-import type { ApplicantComparison } from "@/lib/ai-types";
+import { BrandBackground } from "@/components/ui/brand-background";
+import { MobileBottomNav } from "@/components/dashboard/mobile-bottom-nav";
+import { demoApplicants } from "@/lib/demo-data";
+import { getApplicantIntelligence } from "@/lib/applicant-intelligence";
+import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
+import { OnboardingCard } from "@/components/dashboard/onboarding-card";
+import { getNextBestAction } from "@/lib/next-best-action";
 
-type DashboardSection = "overview" | "new" | "billing" | "all";
-
-type DashboardShellProps = {
+// ── Props ────────────────────────────────────────────────────────────────────
+type DashboardProps = {
   initialApplicants: ApplicantRecord[];
   organization: {
     _id: string;
@@ -29,605 +21,651 @@ type DashboardShellProps = {
     plan: string;
     billingStatus: string;
     hasBillingCustomer: boolean;
-    complianceSettings: {
-      defaultPropertyCity: string;
-      defaultPropertyState: string;
-    };
   } | null;
   user: {
     name?: string | null;
     email?: string | null;
-    role?: "owner" | "member";
+    role?: "owner" | "admin" | "member" | "viewer";
   };
-  billingEnabled: boolean;
-  addressLookupEnabled: boolean;
 };
 
-type DecisionFilter = "All" | "Strong" | "Review" | "Risk";
-type SortValue = "newest" | "highest-score" | "highest-affordability";
+// ── Helpers ──────────────────────────────────────────────────────────────────
+const planLabel: Record<string, string> = {
+  starter: "Starter",
+  pro: "Pro",
+  business: "Business",
+  agency: "Agency",
+};
 
+function readinessLabel(percent: number) {
+  if (percent >= 85) return "Ready Now";
+  if (percent >= 70) return "Almost Ready";
+  if (percent >= 40) return "Needs Follow-Up";
+  return "Not Ready";
+}
+
+function readinessPillClass(percent: number) {
+  if (percent >= 85) return "pill pill-success";
+  if (percent >= 70) return "pill pill-info";
+  if (percent >= 40) return "pill pill-warning";
+  return "pill pill-error";
+}
+
+function scoreColor(score: number) {
+  if (score >= 80) return "text-[#059669]";
+  if (score >= 65) return "text-[#d97706]";
+  return "text-[#dc2626]";
+}
+
+// ── Component ────────────────────────────────────────────────────────────────
 export function ApplicantDashboard({
   initialApplicants,
   organization,
   user,
-  billingEnabled,
-  addressLookupEnabled,
-}: DashboardShellProps) {
-  // ── Mobile section toggle ───────────────────────────────────────────────
-  const [mobileSection, setMobileSection] =
-    useState<DashboardSection>("overview");
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-
+}: DashboardProps) {
   const [applicants, setApplicants] = useState(initialApplicants);
-  const [query, setQuery] = useState("");
-  const [decisionFilter, setDecisionFilter] = useState<DecisionFilter>("All");
-  const [propertyFilter, setPropertyFilter] = useState("All properties");
-  const [sortBy, setSortBy] = useState<SortValue>("newest");
-  const [editingApplicant, setEditingApplicant] =
-    useState<ApplicantFormValues | null>(null);
-  const [pending, setPending] = useState(false);
-  const [message, setMessage] = useState("");
-  const [comparison, setComparison] = useState<ApplicantComparison | null>(
-    null,
-  );
-  const [comparisonPending, setComparisonPending] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [demoWalkthroughOpen, setDemoWalkthroughOpen] = useState(false);
+  const planName =
+    planLabel[organization?.plan ?? "starter"] ??
+    organization?.plan ??
+    "Starter";
+  const userEmail = user.email ?? "Account";
 
-  const deferredQuery = useDeferredValue(query);
-
-  const filteredApplicants = useMemo(() => {
-    const normalizedQuery = deferredQuery.trim().toLowerCase();
-
-    return [...applicants]
-      .filter((applicant) => {
-        if (decisionFilter !== "All" && applicant.decision !== decisionFilter) {
-          return false;
-        }
-
-        if (propertyFilter !== "All properties") {
-          const propertyLabel = [
-            applicant.propertyAddress,
-            applicant.propertyCity,
-            applicant.propertyState,
-            applicant.propertyPostalCode,
-          ]
-            .filter(Boolean)
-            .join(", ");
-          if (propertyLabel !== propertyFilter) {
-            return false;
-          }
-        }
-
-        if (!normalizedQuery) {
-          return true;
-        }
-
-        return [
-          applicant.name,
-          applicant.email,
-          applicant.status,
-          applicant.propertyAddress,
-          applicant.propertyCity,
-          applicant.propertyState,
-          applicant.propertyPostalCode,
-        ]
-          .join(" ")
-          .toLowerCase()
-          .includes(normalizedQuery);
-      })
-      .sort((a, b) => {
-        if (sortBy === "highest-score") return b.totalScore - a.totalScore;
-        if (sortBy === "highest-affordability")
-          return b.affordabilityRatio - a.affordabilityRatio;
-        return (
-          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-        );
-      });
-  }, [applicants, decisionFilter, deferredQuery, propertyFilter, sortBy]);
-
-  const propertyOptions = useMemo(() => {
-    const uniqueProperties = Array.from(
-      new Set(
-        applicants
-          .map((applicant) =>
-            [
-              applicant.propertyAddress,
-              applicant.propertyCity,
-              applicant.propertyState,
-              applicant.propertyPostalCode,
-            ]
-              .filter(Boolean)
-              .join(", "),
-          )
-          .filter(Boolean),
-      ),
-    ).sort((a, b) => a.localeCompare(b));
-
-    return ["All properties", ...uniqueProperties];
-  }, [applicants]);
-
-  const summary = useMemo(() => {
-    const strong = applicants.filter(
-      (item) => item.decision === "Strong",
-    ).length;
-    const review = applicants.filter(
-      (item) => item.decision === "Review",
-    ).length;
-    const risk = applicants.filter((item) => item.decision === "Risk").length;
-    const avgScore =
-      applicants.length > 0
-        ? Math.round(
-            applicants.reduce((sum, item) => sum + item.totalScore, 0) /
-              applicants.length,
-          )
-        : 0;
-    const avgAffordability =
-      applicants.length > 0
-        ? applicants.reduce((sum, item) => sum + item.affordabilityRatio, 0) /
-          applicants.length /
-          5
-        : 0;
-
-    return {
-      total: applicants.length,
-      strong,
-      review,
-      risk,
-      avgScore,
-      avgAffordability,
-    };
-  }, [applicants]);
-
-  async function saveApplicant(values: ApplicantFormValues) {
-    setPending(true);
-    setMessage("");
-
-    try {
-      const endpoint = values._id
-        ? `/api/applicants/${values._id}`
-        : "/api/applicants";
-      const method = values._id ? "PATCH" : "POST";
-      const response = await fetch(endpoint, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
-      });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setMessage(data.message || "Unable to save applicant.");
-        return false;
-      }
-
-      startTransition(() => {
-        setApplicants((current) => {
-          if (values._id) {
-            return current.map((item) => (item._id === data._id ? data : item));
-          }
-
-          return [data, ...current];
-        });
-      });
-
-      setEditingApplicant(null);
-      setMessage(values._id ? "Applicant updated." : "Applicant created.");
-      return true;
-    } finally {
-      setPending(false);
-    }
+  // ── Demo data loader ──
+  function loadDemoData() {
+    startTransition(() => setApplicants(demoApplicants));
   }
 
-  async function deleteApplicant(id: string) {
-    setMessage("");
-    const response = await fetch(`/api/applicants/${id}`, { method: "DELETE" });
-    const data = await response.json();
-
-    if (!response.ok) {
-      setMessage(data.message || "Unable to delete applicant.");
-      return;
-    }
-
-    startTransition(() => {
-      setApplicants((current) => current.filter((item) => item._id !== id));
-    });
-
-    if (editingApplicant?._id === id) {
-      setEditingApplicant(null);
-    }
-  }
-
-  async function runAiComparison() {
-    setComparisonPending(true);
-    setMessage("");
-
-    try {
-      const response = await fetch("/api/ai/compare", { method: "POST" });
-      const data = await response.json();
-
-      if (!response.ok) {
-        setMessage(data.message || "Unable to compare applicants.");
-        return;
-      }
-
-      setComparison(data);
-    } finally {
-      setComparisonPending(false);
-    }
-  }
-
-  const applicantNameById = useMemo(
+  // ── Computed ────────────────────────────────────────────────────────────────
+  const applicantsIntel = useMemo(
     () =>
-      Object.fromEntries(
-        applicants.map((applicant) => [applicant._id, applicant.name]),
-      ),
+      applicants.map((a) => ({
+        applicant: a,
+        intel: getApplicantIntelligence(a),
+      })).map((item) => ({
+        ...item,
+        nextAction: getNextBestAction(item.applicant, item.intel),
+      })),
     [applicants],
   );
 
-  const opsReport = useMemo(
-    () => generateOperationsReport(applicants),
-    [applicants],
-  );
+  // Simple stats (section E — only 4 numbers)
+  const stats = useMemo(() => {
+    const ready = applicantsIntel.filter((a) => a.intel.readiness >= 85).length;
+    const missingDocs = applicantsIntel.filter(
+      (a) => a.intel.documentsMissing.length > 0,
+    ).length;
+    const avgReadiness = applicantsIntel.length
+      ? Math.round(
+          applicantsIntel.reduce((s, a) => s + a.intel.readiness, 0) /
+            applicantsIntel.length,
+        )
+      : 0;
+    return { total: applicants.length, ready, missingDocs, avgReadiness };
+  }, [applicantsIntel]);
 
-  const sectionTabs: { key: DashboardSection; label: string; icon: string }[] =
-    [
-      { key: "overview", label: "Overview", icon: "◉" },
-      { key: "new", label: "New", icon: "+" },
-      { key: "billing", label: "Billing", icon: "$" },
-      { key: "all", label: "All", icon: "≡" },
-    ];
+  // Fastest ready candidate (section C)
+  const fastestReady = useMemo(() => {
+    return [...applicantsIntel].sort((a, b) => {
+      if (b.intel.readiness !== a.intel.readiness)
+        return b.intel.readiness - a.intel.readiness;
+      return b.intel.score - a.intel.score;
+    })[0];
+  }, [applicantsIntel]);
+
+  // Priority feed items (section B — top 3 actions)
+  const priorityItems = useMemo(() => {
+    return applicantsIntel
+      .filter(
+        (a) => a.intel.documentsMissing.length > 0 || a.intel.readiness < 85,
+      )
+      .sort((a, b) => a.intel.readiness - b.intel.readiness)
+      .slice(0, 3)
+      .map((a) => ({
+        id: a.applicant._id,
+        name: a.applicant.name,
+        action:
+          a.intel.documentsMissing.length > 0
+            ? `Missing: ${a.intel.documentsMissing.slice(0, 2).join(", ")}${a.intel.documentsMissing.length > 2 ? " + more" : ""}`
+            : "Manual review needed",
+        readiness: a.intel.readiness,
+      }));
+  }, [applicantsIntel]);
+
+  // Recent applicants (section D)
+  const recentApplicants = useMemo(() => {
+    return [...applicantsIntel]
+      .sort(
+        (a, b) =>
+          new Date(b.applicant.updatedAt).getTime() -
+          new Date(a.applicant.updatedAt).getTime(),
+      )
+      .slice(0, 5);
+  }, [applicantsIntel]);
 
   return (
-    <div className="dark-form-scope rentninja-app-shell min-h-screen">
-      <div className="mx-auto flex min-h-screen w-full max-w-[1440px] flex-col gap-6 px-4 py-5 sm:px-6 lg:px-8">
-        {/* ── Mobile section tabs (hidden on xl+) ── */}
-        <div className="xl:hidden sticky top-0 z-30 -mx-4 sm:-mx-6 -mt-5 px-4 sm:px-6 pt-3 pb-2 bg-[#0b0e13]/95 backdrop-blur">
-          <div className="flex items-center justify-between">
-            <button
-              onClick={() => setSidebarOpen(true)}
-              className="p-2 -ml-2 min-h-[44px] min-w-[44px] flex items-center justify-center text-gray-300 hover:text-white"
-              aria-label="Open menu"
+    <div className="relative isolate min-h-screen overflow-x-hidden bg-[#e8eef6] text-[#071126]">
+      <BrandBackground variant="dashboard" />
+      {/* ── Mobile top bar ── */}
+      <div className="sticky top-0 z-30 -mx-0 bg-[#e8eef6]/95 px-4 py-3 backdrop-blur sm:px-6 lg:hidden">
+        <div className="flex items-center justify-between">
+          <Logo />
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="flex min-h-[44px] items-center gap-2 rounded-full border border-[#b8c4d4] bg-white px-3 text-xs font-black text-[#071126] shadow-[0_8px_18px_rgba(15,23,42,0.08)]"
+            aria-label="Open account menu"
+          >
+            Account
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
             >
-              <svg
-                className="w-6 h-6"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M4 6h16M4 12h16M4 18h16"
-                />
-              </svg>
-            </button>
-            <span className="text-sm font-semibold text-white capitalize">
-              {sectionTabs.find((t) => t.key === mobileSection)?.label ??
-                "Dashboard"}
-            </span>
-            <div className="w-10" />
-          </div>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M4 6h16M4 12h16M4 18h16"
+              />
+            </svg>
+          </button>
         </div>
+      </div>
 
-        {/* ── Mobile sidebar drawer ── */}
-        {sidebarOpen && (
-          <div className="fixed inset-0 z-50 xl:hidden" role="dialog">
-            <div
-              className="absolute inset-0 bg-black/60"
-              onClick={() => setSidebarOpen(false)}
-            />
-            <nav className="relative z-50 w-64 h-full bg-[#11161e] border-r border-white/10 flex flex-col p-4 overflow-y-auto">
-              <div className="flex items-center justify-between mb-6">
-                <Logo />
-                <button
-                  onClick={() => setSidebarOpen(false)}
-                  className="p-2 text-gray-400 hover:text-white min-h-[44px] min-w-[44px]"
-                  aria-label="Close menu"
-                >
-                  ✕
-                </button>
-              </div>
-              <div className="space-y-1">
-                {sectionTabs.map((tab) => (
-                  <button
-                    key={tab.key}
-                    onClick={() => {
-                      setMobileSection(tab.key);
-                      setSidebarOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-sm font-medium transition-colors min-h-[44px] ${mobileSection === tab.key ? "bg-indigo-600 text-white" : "text-gray-300 hover:bg-gray-800 hover:text-white"}`}
-                  >
-                    <span>{tab.icon}</span>
-                    <span>{tab.label}</span>
-                  </button>
-                ))}
-              </div>
-              <div className="mt-auto pt-6 space-y-2">
-                {user.role === "owner" && (
-                  <Link
-                    href="/admin"
-                    className="block w-full text-left px-3 py-3 rounded-lg text-sm text-gray-300 hover:bg-gray-800 hover:text-white min-h-[44px] flex items-center gap-3"
-                    onClick={() => setSidebarOpen(false)}
-                  >
-                    <span>⚙</span> Admin
-                  </Link>
-                )}
-                <button
-                  onClick={() => {
-                    setSidebarOpen(false);
-                    signOut({ callbackUrl: "/login" });
-                  }}
-                  className="w-full text-left px-3 py-3 rounded-lg text-sm text-gray-300 hover:bg-gray-800 hover:text-white min-h-[44px] flex items-center gap-3"
-                >
-                  <span>↩</span> Sign out
-                </button>
-              </div>
-            </nav>
-          </div>
-        )}
-
-        <header
-          className={`rounded-[34px] border border-white/10 bg-white/6 px-5 py-5 shadow-[0_24px_70px_rgba(0,0,0,0.26)] ${mobileSection !== "overview" && mobileSection !== "all" ? "xl:block hidden" : ""}`}
-        >
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-            <div className="space-y-5">
+      {/* ── Mobile sidebar drawer ── */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden" role="dialog">
+          <div
+            className="absolute inset-0 bg-black/30"
+            onClick={() => setSidebarOpen(false)}
+          />
+          <nav className="relative z-50 flex h-full w-[min(20rem,88vw)] flex-col overflow-y-auto border-r border-[#b8c4d4] bg-white p-4 shadow-xl">
+            <div className="mb-4 flex items-center justify-between">
               <Logo />
-              <div>
-                <p className="text-xs uppercase tracking-[0.28em] text-[#f7b36d]">
-                  Tenant Screening Dashboard
-                </p>
-                <h1 className="mt-2 max-w-3xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-                  Screen applicants, catch red flags early, and keep leasing
-                  decisions inside one SaaS workspace.
-                </h1>
+              <button
+                onClick={() => setSidebarOpen(false)}
+                className="grid min-h-[44px] min-w-[44px] place-items-center rounded-full border border-[#94a3b8] bg-white text-sm font-black text-[#071126]"
+                aria-label="Close account menu"
+              >
+                X
+              </button>
+            </div>
+            <div className="mb-4 rounded-[20px] border border-[#b8c4d4] bg-[#f8fafc] p-4">
+              <p className="truncate text-sm font-black text-[#071126]">
+                {userEmail}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="inline-flex min-h-[34px] items-center rounded-full border border-[#b8c4d4] bg-white px-3 text-xs font-black uppercase text-[#071126]">
+                  {planName.toUpperCase()}
+                </span>
+                <span className="inline-flex min-h-[34px] items-center rounded-full border border-[#b8c4d4] bg-white px-3 text-xs font-black text-[#071126]">
+                  {stats.total} applicants
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Link
+                  href="/dashboard/billing"
+                  onClick={() => setSidebarOpen(false)}
+                  className="field-action !min-h-[40px] !px-3 !text-xs"
+                >
+                  Billing
+                </Link>
+                <Link
+                  href="/dashboard/settings"
+                  onClick={() => setSidebarOpen(false)}
+                  className="field-action !min-h-[40px] !px-3 !text-xs"
+                >
+                  Settings
+                </Link>
               </div>
             </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="rounded-[24px] border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-200">
-                <p className="font-semibold text-white">
-                  {user.name || "Operator"}
-                </p>
-                <p>{user.email}</p>
-              </div>
-              {user.role === "owner" ? (
-                <Link href="/admin">
-                  <Button variant="secondary" type="button">
-                    Admin
-                  </Button>
+            <div className="space-y-1">
+              {[
+                { href: "/dashboard", label: "Dashboard" },
+                { href: "/dashboard/applicants", label: "Applicants" },
+                { href: "/dashboard/new", label: "Add Applicant" },
+                { href: "/dashboard/ai", label: "AI Tools" },
+                { href: "/dashboard/reports", label: "Reports" },
+                { href: "/dashboard/billing", label: "Billing" },
+                { href: "/dashboard/settings", label: "Settings" },
+              ].map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex min-h-[44px] items-center rounded-lg px-3 py-3 text-sm font-semibold hover:bg-[#fff0ea] hover:text-[#ff4b1f]"
+                >
+                  {item.label}
                 </Link>
-              ) : null}
-              <Button
-                variant="ghost"
-                type="button"
+              ))}
+            </div>
+            <div className="mt-auto space-y-2 pt-6">
+              {(user.role === "owner" || user.role === "admin") && (
+                <Link
+                  href="/admin"
+                  onClick={() => setSidebarOpen(false)}
+                  className="flex min-h-[44px] items-center rounded-lg px-3 py-3 text-sm font-semibold hover:bg-[#fff0ea] hover:text-[#ff4b1f]"
+                >
+                  Admin
+                </Link>
+              )}
+              <button
                 onClick={() => signOut({ callbackUrl: "/login" })}
+                className="flex min-h-[44px] w-full items-center rounded-lg px-3 py-3 text-left text-sm font-semibold hover:bg-[#fff0ea] hover:text-[#ff4b1f]"
               >
                 Sign out
-              </Button>
+              </button>
+            </div>
+          </nav>
+        </div>
+      )}
+
+      {/* ── Main content ── */}
+      <div className="mx-auto flex min-h-screen max-w-[1280px] flex-col gap-6 px-4 py-5 pb-28 sm:px-6 lg:px-8 lg:pb-8">
+        {/* ═══════════════════════════════════════════════════════════════════
+            SECTION A — Welcome card
+            ════════════════════════════════════════════════════════════════ */}
+        <header className="card p-4 sm:p-6">
+          <div className="hidden items-start justify-between gap-5 lg:flex">
+            <Logo />
+            <div className="flex items-start gap-2 rounded-[22px] border border-[#b8c4d4] bg-[#f8fafc] p-2 shadow-[0_8px_20px_rgba(15,23,42,0.06)]">
+              <span className="inline-flex min-h-[38px] items-center rounded-full border border-[#b8c4d4] bg-white px-4 text-xs font-black uppercase tracking-wide text-[#071126]">
+                {planName.toUpperCase()}
+              </span>
+              <span className="inline-flex min-h-[38px] items-center rounded-full border border-[#b8c4d4] bg-white px-4 text-xs font-black text-[#071126]">
+                {stats.total} applicants
+              </span>
+              <div className="min-w-0 rounded-[16px] border border-[#b8c4d4] bg-white px-4 py-2">
+                <p className="max-w-[220px] truncate text-xs font-bold text-[#475569]">
+                  {userEmail}
+                </p>
+                <button
+                  onClick={() => signOut({ callbackUrl: "/login" })}
+                  className="mt-1 text-xs font-black text-[#ff4b1f] hover:text-[#e63e16]"
+                >
+                  Sign out
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-0 space-y-3 lg:mt-5">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                {user.name
+                  ? `Good ${getGreeting()}, ${user.name.split(" ")[0]}`
+                  : "Pick the strongest applicant faster"}
+              </h1>
+              <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-[#334155]">
+                Paste applicant info. RentNinja organizes it, scores it, shows
+                what's missing, and tells you the next best step.
+              </p>
+            </div>
+            <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-center">
+              <Link href="/dashboard/ai#one-minute" className="btn-primary w-full sm:w-auto">
+                Start 1-Minute Applicant Review
+              </Link>
+              <Link href="/dashboard/new" className="btn-secondary w-full sm:w-auto">
+                Add Applicant
+              </Link>
             </div>
           </div>
         </header>
 
-        {/* ── Section-conditioned layout ── */}
-        <SummaryCards summary={summary} />
+        {/* ═══════════════════════════════════════════════════════════════════
+            SECTION E — Simple stats row (only 4)
+            ════════════════════════════════════════════════════════════════ */}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {[
+            { label: "Active applicants", value: stats.total },
+            { label: "Ready for review", value: stats.ready },
+            { label: "Missing documents", value: stats.missingDocs },
+            { label: "Avg readiness", value: `${stats.avgReadiness}%` },
+          ].map((stat) => (
+            <div key={stat.label} className="card-inner px-4 py-4">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                {stat.label}
+              </p>
+              <p className="mt-1 text-2xl font-black text-[#071126]">
+                {stat.value}
+              </p>
+            </div>
+          ))}
+        </div>
 
-        {(mobileSection === "overview" || mobileSection === "all") && (
-          <PriorityFeed items={opsReport.all} />
+        {fastestReady ? (
+          <section className="card p-5 sm:p-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
+                  What Should I Do Next?
+                </p>
+                <h2 className="mt-1 text-xl font-bold">
+                  {fastestReady.nextAction.nextBestActionLabel}
+                </h2>
+                <p className="mt-1 text-sm font-semibold text-[#475569]">
+                  {fastestReady.nextAction.nextBestActionReason}
+                </p>
+              </div>
+              <Link
+                href={`/dashboard/applicants/${fastestReady.applicant._id}`}
+                className="btn-primary text-sm"
+              >
+                Act on this applicant
+              </Link>
+            </div>
+          </section>
+        ) : null}
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Demo mode loader
+            ════════════════════════════════════════════════════════════════ */}
+        {process.env.NODE_ENV === "development" && (
+          <div className="card p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
+                  Demo Mode
+                </p>
+                <p className="mt-1 text-base font-bold">
+                  Load sample data to preview the dashboard
+                </p>
+                <p className="mt-1 text-sm text-[#475569]">
+                  5 applicants with different scores, statuses, and AI
+                  summaries.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button onClick={loadDemoData} className="btn-primary">
+                  Load Demo Data
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDemoWalkthroughOpen((open) => !open)}
+                  className="btn-secondary"
+                >
+                  Run Demo Walkthrough
+                </button>
+              </div>
+            </div>
+            {demoWalkthroughOpen ? (
+              <div className="mt-4 grid gap-2 border-t border-[#e8eef6] pt-4 text-sm font-semibold text-[#334155] sm:grid-cols-2 lg:grid-cols-4">
+                {[
+                  "Paste a messy applicant message",
+                  "AI extracts clean applicant details",
+                  "RentNinja shows missing documents",
+                  "Ninja Decision Score appears",
+                  "One-click follow-up is generated",
+                  "Owner report is created",
+                  "Applicant moves to Ready for Review",
+                  "Time saved receipt is shown",
+                ].map((step, index) => (
+                  <div
+                    key={step}
+                    className="rounded-2xl border border-[#b8c4d4] bg-white px-4 py-3"
+                  >
+                    <span className="text-xs font-black text-[#ff4b1f]">
+                      {index + 1}.
+                    </span>{" "}
+                    {step}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
         )}
 
-        <div
-          className={`grid gap-5 ${mobileSection === "all" ? "grid-cols-1" : "xl:grid-cols-[0.9fr,1.1fr]"}`}
-        >
-          <div
-            className={`space-y-5 ${mobileSection !== "overview" && mobileSection !== "new" && mobileSection !== "billing" ? "hidden xl:block" : ""}`}
-          >
-            <ApplicantForm
-              initialApplicant={editingApplicant}
-              submitting={pending}
-              onSubmit={saveApplicant}
-              onCancelEdit={() => setEditingApplicant(null)}
-              defaultPropertyCity={
-                organization?.complianceSettings.defaultPropertyCity ?? ""
-              }
-              defaultPropertyState={
-                organization?.complianceSettings.defaultPropertyState ?? ""
-              }
-              addressLookupEnabled={addressLookupEnabled}
-            />
-            {organization ? (
-              <BillingCard
-                organizationName={organization.name}
-                plan={organization.plan}
-                billingStatus={organization.billingStatus}
-                billingEnabled={billingEnabled}
-                hasBillingCustomer={organization.hasBillingCustomer}
-              />
-            ) : null}
-          </div>
+        {applicants.length === 0 ? <OnboardingCard /> : null}
 
-          <div className="space-y-5">
-            <section className="rounded-[32px] border border-white/10 bg-white/5 p-5">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="text-xs uppercase tracking-[0.24em] text-[#f7b36d]">
-                    Pipeline
-                  </p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">
-                    Applicants you can act on today
-                  </h2>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <input
-                    className="rounded-full border border-white/10 bg-white/5 px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
-                    placeholder="Search applicant"
-                    value={query}
-                    onChange={(event) => setQuery(event.target.value)}
-                  />
-                  <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
-                    value={decisionFilter}
-                    onChange={(event) =>
-                      setDecisionFilter(event.target.value as DecisionFilter)
-                    }
-                  >
-                    {["All", "Strong", "Review", "Risk"].map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
-                    value={propertyFilter}
-                    onChange={(event) => setPropertyFilter(event.target.value)}
-                  >
-                    {propertyOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                  <select
-                    className="rounded-full border border-white/10 bg-[#10141c] px-4 py-3 text-base text-white outline-none transition focus:border-[#f7b36d]/60"
-                    value={sortBy}
-                    onChange={(event) =>
-                      setSortBy(event.target.value as SortValue)
-                    }
-                  >
-                    <option value="newest">Newest</option>
-                    <option value="highest-score">Highest score</option>
-                    <option value="highest-affordability">
-                      Highest affordability
-                    </option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="mt-4 flex flex-wrap items-center gap-3">
-                <Button
-                  type="button"
-                  onClick={runAiComparison}
-                  disabled={comparisonPending || applicants.length < 2}
+        {/* ═══════════════════════════════════════════════════════════════════
+            SECTION C — Fastest Ready Candidate
+            ════════════════════════════════════════════════════════════════ */}
+        {fastestReady && (
+          <section className="card overflow-hidden">
+            <div className="border-b border-[#e8eef6] px-5 py-4 sm:px-6">
+              <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
+                Fastest Ready Candidate
+              </p>
+              <h2 className="mt-1 text-xl font-bold">
+                {fastestReady.applicant.name}
+              </h2>
+              <p className="mt-1 text-sm text-[#475569]">
+                Best applicant to act on today based on readiness,
+                documentation, and score.
+              </p>
+            </div>
+            <div className="grid gap-0 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="border-b border-r border-[#e8eef6] px-5 py-4 sm:border-b-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  Readiness
+                </p>
+                <p className="mt-1 text-2xl font-black text-[#ff4b1f]">
+                  {fastestReady.intel.readiness}%
+                </p>
+                <span
+                  className={readinessPillClass(fastestReady.intel.readiness)}
                 >
-                  {comparisonPending
-                    ? "Ranking applicants..."
-                    : "AI compare applicants"}
-                </Button>
-                <p className="text-sm text-slate-300">
-                  Compare the current pool and get a plain-English
-                  recommendation.
+                  {readinessLabel(fastestReady.intel.readiness)}
+                </span>
+              </div>
+              <div className="border-b border-r border-[#e8eef6] px-5 py-4 sm:border-b-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  Score
+                </p>
+                <p
+                  className={`mt-1 text-2xl font-black ${scoreColor(fastestReady.intel.score)}`}
+                >
+                  {fastestReady.intel.score}/100
                 </p>
               </div>
-
-              {message ? (
-                <p className="mt-4 text-sm text-amber-100">{message}</p>
-              ) : null}
-            </section>
-
-            {comparison ? (
-              <section className="rounded-[32px] border border-sky-300/15 bg-sky-300/8 p-5">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs uppercase tracking-[0.24em] text-sky-100">
-                    AI Comparison
-                  </p>
-                  <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-semibold text-white">
-                    Best fit:{" "}
-                    {applicantNameById[comparison.bestApplicantId] ||
-                      "Top applicant"}
-                  </div>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-slate-100">
-                  {comparison.overview}
+              <div className="border-b border-r border-[#e8eef6] px-5 py-4 sm:border-b-0">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  Risk
                 </p>
-                <div className="mt-4 grid gap-4 xl:grid-cols-[1.1fr,0.9fr]">
-                  <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
-                    <p className="text-xs uppercase tracking-[0.22em] text-slate-300">
-                      Ranking
-                    </p>
-                    <ul className="mt-3 grid gap-2 text-sm text-slate-100">
-                      {comparison.ranking.map((item) => (
-                        <li
-                          key={item.applicantId}
-                          className="rounded-2xl border border-white/8 bg-white/5 px-3 py-3"
-                        >
-                          <span className="font-semibold text-white">
-                            #{item.rank}{" "}
-                            {applicantNameById[item.applicantId] || "Applicant"}
-                          </span>
-                          <p className="mt-1 text-slate-300">{item.reason}</p>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div className="grid gap-4">
-                    <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-300">
-                        Watchouts
-                      </p>
-                      <ul className="mt-3 grid gap-2 text-sm text-slate-100">
-                        {comparison.watchouts.map((item) => (
-                          <li
-                            key={item}
-                            className="rounded-2xl border border-white/8 bg-white/5 px-3 py-2"
-                          >
-                            {item}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                    <div className="rounded-[24px] border border-white/8 bg-black/15 p-4">
-                      <p className="text-xs uppercase tracking-[0.22em] text-slate-300">
-                        Recommended next step
-                      </p>
-                      <p className="mt-3 text-sm leading-6 text-slate-100">
-                        {comparison.nextStep}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </section>
-            ) : null}
+                <p className="mt-1 text-2xl font-black text-[#071126]">
+                  {fastestReady.intel.riskLevel}
+                </p>
+              </div>
+              <div className="px-5 py-4">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-[#475569]">
+                  Next Step
+                </p>
+                <p className="mt-1 text-sm font-bold leading-snug text-[#071126]">
+                  {fastestReady.nextAction.nextBestActionLabel}
+                </p>
+                {fastestReady.intel.documentsMissing.length > 0 && (
+                  <p className="mt-2 text-xs font-semibold text-[#dc2626]">
+                Request:{" "}
+                    {fastestReady.intel.documentsMissing.slice(0, 3).join(", ")}
+                    {fastestReady.intel.documentsMissing.length > 3 &&
+                      " + more"}
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="border-t border-[#e8eef6] px-5 py-3 sm:px-6">
+              <Link
+                href={`/dashboard/applicants/${fastestReady.applicant._id}`}
+                className="btn-primary text-sm"
+              >
+                Act on this applicant
+              </Link>
+            </div>
+          </section>
+        )}
 
-            <ApplicantList
-              applicants={filteredApplicants}
-              onEdit={(applicant) =>
-                setEditingApplicant({
-                  _id: applicant._id,
-                  name: applicant.name,
-                  email: applicant.email,
-                  phone: applicant.phone,
-                  propertyAddress: applicant.propertyAddress,
-                  propertyCity: applicant.propertyCity,
-                  propertyState: applicant.propertyState,
-                  propertyPostalCode: applicant.propertyPostalCode,
-                  moveInDate: applicant.moveInDate,
-                  propertyAddressConfirmed: Boolean(applicant.propertyAddress),
-                  coApplicants: applicant.coApplicants,
-                  applicationSource:
-                    applicant.applicationSource as ApplicantFormValues["applicationSource"],
-                  monthlyRent: applicant.monthlyRent,
-                  monthlyIncome: applicant.monthlyIncome,
-                  housingSupport: applicant.housingSupport,
-                  supportProgram: applicant.supportProgram,
-                  monthlySubsidyAmount: applicant.monthlySubsidyAmount,
-                  tenantPortionRent: applicant.tenantPortionRent,
-                  subsidyStatus: applicant.subsidyStatus,
-                  inspectionStatus: applicant.inspectionStatus,
-                  residentScore: applicant.residentScore,
-                  rentalHistoryScore: applicant.scores.rentalHistory,
-                  rulesComplianceScore: applicant.scores.rulesCompliance,
-                  timelineScore: applicant.scores.timeline,
-                  communicationScore: applicant.scores.communication,
-                  documentationScore: applicant.scores.documentation,
-                  notes: applicant.notes.join("\n"),
-                  status: applicant.status,
-                })
-              }
-              onDelete={deleteApplicant}
-            />
+        {/* ═══════════════════════════════════════════════════════════════════
+            SECTION B + D — Priority + Recent in 2-col layout
+            ════════════════════════════════════════════════════════════════ */}
+        <div className="grid gap-6 lg:grid-cols-2">
+          {/* Smart Missing Docs */}
+          <section className="card p-5 sm:p-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
+              Smart Missing Docs
+            </p>
+            <h2 className="mt-1 text-lg font-bold">Who needs attention</h2>
+
+            {priorityItems.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-[#b8c4d4] p-6 text-center">
+                <p className="text-sm font-semibold text-[#475569]">
+                  All caught up
+                </p>
+                <p className="mt-1 text-xs text-[#475569]">
+                  No pending actions right now.
+                </p>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {priorityItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href={`/dashboard/applicants/${item.id}`}
+                    className="flex items-center justify-between rounded-xl border border-[#e8eef6] px-4 py-3 transition hover:border-[#ff4b1f] hover:bg-[#fff0ea]/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-[#071126] truncate">
+                        {item.name}
+                      </p>
+                      <p className="mt-0.5 text-xs font-medium text-[#475569]">
+                        {item.action.startsWith("Missing:")
+                          ? "Request missing documents"
+                          : item.action}
+                      </p>
+                    </div>
+                    <span className={readinessPillClass(item.readiness)}>
+                      {item.readiness}%
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            <div className="mt-4">
+              <Link
+                href="/dashboard/applicants"
+                className="text-sm font-bold text-[#ff4b1f] hover:underline"
+              >
+                View all applicants -&gt;
+              </Link>
+            </div>
+          </section>
+
+          {/* Recent Activity */}
+          <section className="card p-5 sm:p-6">
+            <p className="text-xs font-bold uppercase tracking-wider text-[#475569]">
+              Recent Activity
+            </p>
+            <h2 className="mt-1 text-lg font-bold">Recently updated</h2>
+
+            {recentApplicants.length === 0 ? (
+              <div className="mt-6 rounded-2xl border border-dashed border-[#b8c4d4] p-6 text-center">
+                <p className="text-sm font-semibold text-[#475569]">
+                  No applicants yet
+                </p>
+                <p className="mt-1 text-xs text-[#475569]">
+                  Add your first applicant to get started.
+                </p>
+                <Link
+                  href="/dashboard/new"
+                  className="btn-primary mt-4 inline-flex text-sm"
+                >
+                  Add Applicant
+                </Link>
+              </div>
+            ) : (
+              <div className="mt-4 space-y-3">
+                {recentApplicants.map(({ applicant, intel, nextAction }) => (
+                  <Link
+                    key={applicant._id}
+                    href={`/dashboard/applicants/${applicant._id}`}
+                    className="flex items-center gap-4 rounded-xl border border-[#e8eef6] px-4 py-3 transition hover:border-[#ff4b1f] hover:bg-[#fff0ea]/50"
+                  >
+                    {/* Avatar */}
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#e8eef6] text-sm font-bold text-[#475569]">
+                      {applicant.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")
+                        .slice(0, 2)
+                        .toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-[#071126] truncate">
+                        {applicant.name}
+                      </p>
+                      <p className="truncate text-xs text-[#475569]">
+                        {applicant.propertyCity}, {applicant.propertyState} |
+                        Status {applicant.status} | Score {intel.score} | Next:{" "}
+                        {nextAction.nextBestActionLabel}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                      <span className={readinessPillClass(intel.readiness)}>
+                        {readinessLabel(intel.readiness)}
+                      </span>
+                      {intel.documentsMissing.length > 0 && (
+                        <span className="text-[10px] font-semibold text-[#dc2626]">
+                          {intel.documentsMissing.length} missing
+                        </span>
+                      )}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            AI Tools shortcut
+            ════════════════════════════════════════════════════════════════ */}
+        <section className="card p-5 sm:p-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
+                AI Tools
+              </p>
+              <h2 className="mt-1 text-lg font-bold">Speed up your review</h2>
+            </div>
+            <div className="grid gap-2 sm:flex sm:flex-wrap">
+              <Link href="/dashboard/ai#one-minute" className="btn-secondary w-full text-sm sm:w-auto">
+                1-Minute Applicant Review
+              </Link>
+              <Link href="/dashboard/compare" className="btn-secondary w-full text-sm sm:w-auto">
+                Compare
+              </Link>
+              <Link
+                href="/dashboard/messages"
+                className="btn-secondary w-full text-sm sm:w-auto"
+              >
+                Generate Message
+              </Link>
+              <Link href="/dashboard/reports" className="btn-secondary w-full text-sm sm:w-auto">
+                Owner Report
+              </Link>
+            </div>
           </div>
+        </section>
+
+        {/* ═══════════════════════════════════════════════════════════════════
+            Compliance reminder
+            ════════════════════════════════════════════════════════════════ */}
+        <div className="rounded-xl border border-[#b8c4d4] bg-white px-4 py-3 text-center text-xs font-bold text-[#475569]">
+          Fair Housing Mode: On. RentNinja uses objective screening criteria
+          only. Final decisions are your responsibility.
         </div>
       </div>
+
+      <MobileBottomNav />
     </div>
   );
+}
+
+function getGreeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "morning";
+  if (h < 17) return "afternoon";
+  return "evening";
 }

@@ -7,6 +7,7 @@ import { applicantSchema } from "@/lib/validators";
 import { calculateApplicantScore } from "@/lib/scoring";
 import { serializeApplicantRecord } from "@/lib/applicant-serialization";
 import { buildApplicantDayKey, buildApplicantFingerprint } from "@/lib/applicant-dedup";
+import { getApplicantUsage, getPlan } from "@/lib/saas-plans";
 import Applicant from "@/models/Applicant";
 import Organization from "@/models/Organization";
 
@@ -154,6 +155,23 @@ export async function POST(request: Request) {
   const organization = await Organization.findById(session.user.organizationId).lean();
   if (!organization) {
     return NextResponse.json({ message: "Workspace not found." }, { status: 404 });
+  }
+
+  const applicantCount = await Applicant.countDocuments({
+    organizationId: new Types.ObjectId(session.user.organizationId)
+  });
+  const usage = getApplicantUsage(applicantCount, organization.plan);
+  if (usage.isAtLimit) {
+    const plan = getPlan(organization.plan);
+    return NextResponse.json(
+      {
+        message: `${plan.name} is limited to ${usage.limit} applicants. Upgrade your plan to keep adding applicants.`,
+        upgradeRequired: true,
+        currentPlan: plan.key,
+        recommendedPlan: plan.key === "starter" ? "pro" : "starter"
+      },
+      { status: 402 }
+    );
   }
 
   const enabledSources = organization.intakeSettings?.enabledSources?.length

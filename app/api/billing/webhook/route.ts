@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { constructStripeEvent } from "@/lib/billing";
 import { dbConnect } from "@/lib/mongodb";
 import { logger } from "@/lib/logger";
+import { normalizePlan } from "@/lib/saas-plans";
 import Organization from "@/models/Organization";
 import ProcessedWebhook from "@/models/ProcessedWebhook";
 
@@ -13,8 +14,8 @@ function mapSubscriptionStatus(
     trialing: "trialing",
     active: "active",
     past_due: "past_due",
-    canceled: "inactive",
-    unpaid: "inactive",
+    canceled: "canceled",
+    unpaid: "unpaid",
     incomplete: "inactive",
     incomplete_expired: "inactive",
     paused: "inactive",
@@ -114,7 +115,7 @@ export async function POST(request: Request) {
         $set: {
           stripeCustomerId: customerId,
           stripeSubscriptionId: subscriptionId,
-          plan: "pro",
+          plan: normalizePlan(session.metadata?.plan || "pro"),
           billingStatus: "active",
         },
       });
@@ -133,17 +134,11 @@ export async function POST(request: Request) {
       const subscription = event.data.object as Stripe.Subscription;
 
       const billingStatus = mapSubscriptionStatus(subscription.status);
-      const plan =
-        subscription.status === "canceled" || subscription.status === "unpaid"
-          ? "starter"
-          : "pro";
-
       await Organization.findOneAndUpdate(
         { stripeSubscriptionId: subscription.id },
         {
           $set: {
             billingStatus,
-            plan,
           },
         },
       );
@@ -153,7 +148,6 @@ export async function POST(request: Request) {
         stripeSubscriptionId: subscription.id,
         stripeStatus: subscription.status,
         billingStatus,
-        plan,
       });
 
       break;
@@ -166,10 +160,10 @@ export async function POST(request: Request) {
         { stripeSubscriptionId: deletedSubscription.id },
         {
           $set: {
-            plan: "starter",
-            billingStatus: "inactive",
-            stripeSubscriptionId: "",
-          },
+          plan: "starter",
+          billingStatus: "canceled",
+          stripeSubscriptionId: "",
+        },
         },
       );
 

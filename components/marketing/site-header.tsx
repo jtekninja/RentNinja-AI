@@ -14,24 +14,20 @@ export function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <header className="flex min-h-[68px] items-center justify-between gap-4 rounded-[22px] border border-[#dfe6f2] bg-white/92 px-5 py-3 shadow-[0_18px_48px_rgba(30,48,82,0.1)] backdrop-blur-xl">
+    <header className="flex min-h-[68px] items-center justify-between gap-4 rounded-[22px] border border-[#b8c4d4] bg-white/92 px-5 py-3 shadow-[0_4px_16px_rgba(7,17,38,0.06)] backdrop-blur-xl">
       <Logo href="/" />
-      <nav className="hidden items-center gap-8 text-sm font-bold text-[#080d1f] md:flex">
+      <nav className="hidden items-center gap-6 text-sm font-bold text-[#071126] md:flex">
         {NAV_LINKS.map((link) => (
           <Link
             key={link.href}
             href={link.href}
-            className="transition hover:text-[#ff4f16]"
+            className="transition hover:text-[#ff4b1f]"
           >
             {link.label}
           </Link>
         ))}
-        <Link
-          href="/register"
-          className="inline-flex min-h-[46px] items-center gap-2 rounded-2xl bg-[#ff4f16] px-5 text-sm font-bold text-white shadow-[0_14px_28px_rgba(255,79,22,0.28)] transition hover:-translate-y-0.5"
-        >
+        <Link href="/register" className="btn-primary !rounded-xl text-sm">
           Get started
-          <span aria-hidden="true">-&gt;</span>
         </Link>
       </nav>
       <button

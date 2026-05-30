@@ -41,8 +41,21 @@ const userSchema = new Schema(
     },
     role: {
       type: String,
-      enum: ["owner", "member"],
+      enum: ["owner", "admin", "member", "viewer"],
       default: "owner"
+    },
+    customerType: {
+      type: String,
+      enum: [
+        "Landlord",
+        "Realtor",
+        "Property Manager",
+        "Property Owner",
+        "Leasing Agent",
+        "Real Estate Team",
+        "Other"
+      ],
+      default: "Landlord"
     }
   },
   {

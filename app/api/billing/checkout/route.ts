@@ -1,20 +1,31 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { env, hasStripeConfig } from "@/lib/env";
+import { env, getStripePriceId, hasStripeConfig } from "@/lib/env";
 import { getStripe } from "@/lib/billing";
 import { connectToDatabase } from "@/lib/mongoose";
+import { getPlan, normalizePlan, type PlanKey } from "@/lib/saas-plans";
 import Organization from "@/models/Organization";
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
   }
 
-  if (!hasStripeConfig()) {
+  const body = await request.json().catch(() => ({}));
+  const requestedPlan = normalizePlan(body?.plan);
+  const checkoutPlan: Exclude<PlanKey, "free"> =
+    requestedPlan === "free" ? "starter" : requestedPlan;
+  const plan = getPlan(checkoutPlan);
+  const priceId = getStripePriceId(checkoutPlan);
+
+  if (!hasStripeConfig() || !priceId) {
     return NextResponse.json(
-      { message: "Stripe is not configured yet. Add your Stripe keys to enable billing." },
-      { status: 503 }
+      {
+        demoMode: true,
+        message: `${plan.name} checkout is in demo mode. Add STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, and ${plan.stripePriceEnv} to enable real Stripe Checkout.`,
+      },
+      { status: 200 }
     );
   }
 
@@ -33,7 +44,7 @@ export async function POST() {
     mode: "subscription",
     line_items: [
       {
-        price: env.stripeProPriceId,
+        price: priceId,
         quantity: 1
       }
     ],
@@ -43,10 +54,10 @@ export async function POST() {
     client_reference_id: organization.id.toString(),
     metadata: {
       organizationId: organization.id.toString(),
-      userId: session.user.id
+      userId: session.user.id,
+      plan: checkoutPlan
     }
   });
 
   return NextResponse.json({ url: checkoutSession.url });
 }
-

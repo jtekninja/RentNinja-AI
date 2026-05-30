@@ -40,11 +40,11 @@ export function ActionHistoryList({
   };
 
   const statusColors: Record<string, string> = {
-    accepted: "text-emerald-300",
-    skipped: "text-slate-500",
-    overridden: "text-amber-300",
-    auto_applied: "text-sky-300",
-    expired: "text-slate-600",
+    accepted: "text-emerald-700",
+    skipped: "text-[#475569]",
+    overridden: "text-amber-700",
+    auto_applied: "text-sky-700",
+    expired: "text-[#475569]",
   };
 
   async function handleFeedback(
@@ -82,20 +82,22 @@ export function ActionHistoryList({
             className="flex items-start gap-2 rounded-xl px-3 py-2 text-xs"
           >
             <span
-              className={`mt-0.5 text-xs ${statusColors[action.status] ?? "text-slate-400"}`}
+              className={`mt-0.5 text-xs ${statusColors[action.status] ?? "text-[#475569]"}`}
             >
               {statusIcons[action.status] ?? "·"}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-slate-300 truncate">{action.title}</p>
+              <p className="truncate font-semibold text-[#071126]">
+                {action.title}
+              </p>
               <div className="mt-0.5 flex flex-wrap items-center gap-2">
                 <span
-                  className={`text-[10px] uppercase font-semibold ${statusColors[action.status] ?? "text-slate-500"}`}
+                  className={`text-[10px] font-bold uppercase ${statusColors[action.status] ?? "text-[#475569]"}`}
                 >
                   {action.status.replace("_", " ")}
                 </span>
                 {action.actedAt ? (
-                  <span className="text-[10px] text-slate-600">
+                  <span className="text-[10px] font-medium text-[#475569]">
                     {new Date(action.actedAt).toLocaleDateString()}
                   </span>
                 ) : null}
@@ -103,10 +105,10 @@ export function ActionHistoryList({
                   <span
                     className={`text-[10px] font-semibold ${
                       action.outcome === "positive"
-                        ? "text-emerald-400"
+                        ? "text-[#059669]"
                         : action.outcome === "negative"
-                          ? "text-rose-400"
-                          : "text-slate-400"
+                          ? "text-[#dc2626]"
+                          : "text-[#475569]"
                     }`}
                   >
                     {outcomeLabel}
@@ -114,7 +116,7 @@ export function ActionHistoryList({
                 ) : null}
               </div>
               {action.overrideReason ? (
-                <p className="mt-1 text-[10px] text-amber-400/70 italic">
+                <p className="mt-1 text-[10px] italic text-amber-700">
                   &ldquo;{action.overrideReason}&rdquo;
                 </p>
               ) : null}
@@ -124,13 +126,13 @@ export function ActionHistoryList({
             {onFeedback && !hasFeedback ? (
               <div className="flex flex-shrink-0 items-center gap-1 ml-2">
                 {feedbackPending === action._id ? (
-                  <span className="text-[10px] text-slate-500">...</span>
+                  <span className="text-[10px] text-[#475569]">...</span>
                 ) : (
                   <>
                     <button
                       onClick={() => handleFeedback(action._id, "positive")}
                       disabled={feedbackPending === action._id}
-                      className="rounded-full border border-emerald-400/20 bg-emerald-400/8 px-1.5 py-0.5 text-[10px] text-emerald-300 hover:bg-emerald-400/20 transition-colors disabled:opacity-50"
+                      className="rounded-full border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-[#059669] transition-colors hover:bg-emerald-100 disabled:opacity-80"
                       title="Mark as helpful"
                     >
                       ✓
@@ -146,7 +148,7 @@ export function ActionHistoryList({
                         }
                       }}
                       disabled={feedbackPending === action._id}
-                      className="rounded-full border border-amber-400/20 bg-amber-400/8 px-1.5 py-0.5 text-[10px] text-amber-300 hover:bg-amber-400/20 transition-colors disabled:opacity-50"
+                      className="rounded-full border border-amber-300 bg-amber-50 px-1.5 py-0.5 text-[10px] font-bold text-[#d97706] transition-colors hover:bg-amber-100 disabled:opacity-80"
                       title="Add note or neutral feedback"
                     >
                       ...
@@ -154,7 +156,7 @@ export function ActionHistoryList({
                     <button
                       onClick={() => handleFeedback(action._id, "negative")}
                       disabled={feedbackPending === action._id}
-                      className="rounded-full border border-rose-400/20 bg-rose-400/8 px-1.5 py-0.5 text-[10px] text-rose-300 hover:bg-rose-400/20 transition-colors disabled:opacity-50"
+                      className="rounded-full border border-rose-300 bg-rose-50 px-1.5 py-0.5 text-[10px] font-bold text-[#dc2626] transition-colors hover:bg-rose-100 disabled:opacity-80"
                       title="Mark as not helpful"
                     >
                       ✕
@@ -168,7 +170,7 @@ export function ActionHistoryList({
             {expandedNoteId === action._id && !hasFeedback ? (
               <div className="w-full mt-2 flex items-center gap-2">
                 <input
-                  className="dark-field flex-1 rounded-lg border border-white/10 bg-black/20 px-2 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60"
+                  className="flex-1 rounded-lg border border-[#94a3b8] bg-white px-2 py-1 text-xs font-medium text-[#071126] outline-none placeholder:text-[#475569] focus:border-[#ff4b1f]"
                   placeholder="Optional note..."
                   value={noteText}
                   onChange={(e) => setNoteText(e.target.value)}
@@ -176,7 +178,7 @@ export function ActionHistoryList({
                 <button
                   onClick={() => handleFeedback(action._id, "neutral")}
                   disabled={feedbackPending === action._id}
-                  className="rounded-full border border-white/10 bg-white/5 px-2 py-1 text-[10px] text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-50"
+                  className="rounded-full border border-[#94a3b8] bg-white px-2 py-1 text-[10px] font-bold text-[#334155] transition-colors hover:border-[#ff4b1f] hover:bg-[#f8fafc] hover:text-[#ff4b1f] disabled:opacity-80"
                 >
                   Send
                 </button>

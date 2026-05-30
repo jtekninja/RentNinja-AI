@@ -41,10 +41,10 @@ export function ActionCard({
   const [overrideOpen, setOverrideOpen] = useState(false);
 
   const priorityColors: Record<string, string> = {
-    P0: "border-rose-300/20 bg-rose-300/8",
-    P1: "border-amber-300/15 bg-amber-300/6",
-    P2: "border-white/8 bg-black/15",
-    info: "border-white/8 bg-black/15",
+    P0: "border-rose-300 bg-rose-50",
+    P1: "border-amber-300 bg-amber-50",
+    P2: "border-[#b8c4d4] bg-white",
+    info: "border-[#b8c4d4] bg-white",
   };
 
   const priorityLabels: Record<string, string> = {
@@ -55,15 +55,15 @@ export function ActionCard({
   };
 
   const priorityLabelColors: Record<string, string> = {
-    P0: "text-rose-300",
-    P1: "text-amber-300",
-    P2: "text-slate-400",
-    info: "text-slate-500",
+    P0: "text-rose-700",
+    P1: "text-amber-700",
+    P2: "text-[#334155]",
+    info: "text-[#475569]",
   };
 
   return (
     <div
-      className={`rounded-[22px] border px-4 py-3 ${priorityColors[action.priority]} ${pending ? "opacity-50 pointer-events-none" : ""}`}
+      className={`rounded-[22px] border px-4 py-3 ${priorityColors[action.priority]} ${pending ? "pointer-events-none opacity-80" : ""}`}
     >
       <div className="flex flex-wrap items-center gap-2 mb-2">
         <span
@@ -77,26 +77,28 @@ export function ActionCard({
           maxConfidence={action.maxConfidence}
         />
         {action.automationAvailable ? (
-          <span className="rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-300">
+          <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-sky-700">
             Auto
           </span>
         ) : null}
         {action.automationSafe && !action.automationAvailable ? (
-          <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-500">
+          <span className="rounded-full border border-[#94a3b8] bg-[#f8fafc] px-2 py-0.5 text-[10px] font-bold text-[#475569]">
             Auto-ready
           </span>
         ) : null}
       </div>
 
-      <p className="text-sm font-semibold text-white">{action.title}</p>
-      <p className="mt-1 text-sm text-slate-300">{action.description}</p>
-      <p className="mt-2 text-sm font-medium text-[#f7b36d]">
+      <p className="text-sm font-bold text-[#071126]">{action.title}</p>
+      <p className="mt-1 text-sm font-medium leading-6 text-[#334155]">
+        {action.description}
+      </p>
+      <p className="mt-2 text-sm font-bold text-[#e83d14]">
         {action.suggestedAction}
       </p>
 
       <button
         onClick={() => setShowFacts(!showFacts)}
-        className="mt-2 text-xs text-slate-500 hover:text-slate-400 transition-colors"
+        className="mt-2 text-xs font-bold text-[#475569] transition-colors hover:text-[#ff4b1f]"
       >
         {showFacts ? "Hide facts" : "Show facts"}
       </button>
@@ -107,21 +109,21 @@ export function ActionCard({
         <button
           onClick={onAccept}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-xs font-semibold text-emerald-300 hover:bg-emerald-400/20 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-bold text-[#059669] transition-colors hover:bg-emerald-100 disabled:opacity-80"
         >
           <span>✓</span> Accept
         </button>
         <button
           onClick={onSkip}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-[#94a3b8] bg-white px-3 py-1.5 text-xs font-bold text-[#334155] transition-colors hover:border-[#ff4b1f] hover:bg-[#f8fafc] hover:text-[#ff4b1f] disabled:opacity-80"
         >
           <span>↩</span> Skip
         </button>
         <button
           onClick={() => setOverrideOpen(true)}
           disabled={pending}
-          className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/20 bg-transparent px-3 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/10 transition-colors disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-white px-3 py-1.5 text-xs font-bold text-[#d97706] transition-colors hover:bg-amber-50 disabled:opacity-80"
         >
           <span>↻</span> Override
         </button>

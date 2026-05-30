@@ -75,8 +75,9 @@ export async function POST(request: Request) {
     organization = await Organization.create({
       name: parsed.data.organizationName,
       slug,
-      plan: "starter",
-      billingStatus: "inactive",
+      plan: "free",
+      billingStatus: "trialing",
+      customerType: parsed.data.customerType,
     });
   } catch (error) {
     return internalError(request, error, {
@@ -100,6 +101,7 @@ export async function POST(request: Request) {
       passwordHash,
       organizationId: organization._id,
       role: "owner",
+      customerType: parsed.data.customerType,
     });
   } catch (error) {
     return internalError(request, error, {

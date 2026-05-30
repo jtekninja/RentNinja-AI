@@ -141,15 +141,15 @@ export function ActionPanel({
   }
 
   return (
-    <div className="mt-3 border-t border-white/8 pt-3">
+    <div className="mt-4 border-t border-[#b8c4d4] pt-4">
       <button
         onClick={onToggle}
-        className="flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-[#f7b36d] hover:text-[#f9c97a] transition-colors"
+        className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-[#ff4b1f] transition-colors hover:text-[#d93b12]"
       >
         <span>{expanded ? "−" : "＋"}</span>
         Next Best Actions
         {actions.length > 0 ? (
-          <span className="rounded-full bg-[#f7b36d]/20 px-1.5 py-0.5 text-[10px] font-bold text-[#f7b36d]">
+          <span className="rounded-full bg-[#fff0ea] px-1.5 py-0.5 text-[10px] font-bold text-[#d63a12] ring-1 ring-[#ffb89f]">
             {actions.length}
           </span>
         ) : null}
@@ -158,7 +158,7 @@ export function ActionPanel({
       {expanded ? (
         <div className="mt-3 space-y-3">
           {error ? (
-            <div className="rounded-2xl border border-rose-300/20 bg-rose-300/8 px-3 py-2 text-xs text-rose-200">
+            <div className="rounded-2xl border border-rose-300 bg-rose-50 px-3 py-2 text-xs font-bold text-[#dc2626]">
               {error}
             </div>
           ) : null}
@@ -168,16 +168,16 @@ export function ActionPanel({
               {[1, 2].map((i) => (
                 <div
                   key={i}
-                  className="animate-pulse rounded-[22px] border border-white/8 bg-black/10 px-4 py-3"
+                  className="animate-pulse rounded-[18px] border border-[#b8c4d4] bg-[#f8fafc] px-4 py-3"
                 >
-                  <div className="h-3 w-16 rounded-full bg-white/10" />
-                  <div className="mt-2 h-4 w-3/4 rounded bg-white/10" />
-                  <div className="mt-1 h-3 w-1/2 rounded bg-white/5" />
+                  <div className="h-3 w-16 rounded-full bg-[#b8c4d4]" />
+                  <div className="mt-2 h-4 w-3/4 rounded bg-[#b8c4d4]" />
+                  <div className="mt-1 h-3 w-1/2 rounded bg-[#e2e8f0]" />
                 </div>
               ))}
             </div>
           ) : actions.length === 0 ? (
-            <p className="text-sm text-slate-400 py-2">
+            <p className="py-2 text-sm font-medium text-[#334155]">
               No pending actions for this applicant.
             </p>
           ) : (
@@ -197,7 +197,7 @@ export function ActionPanel({
 
           {history.length > 0 ? (
             <div className="mt-4">
-              <p className="text-xs uppercase tracking-[0.2em] text-slate-500 mb-2">
+              <p className="mb-2 text-xs font-bold uppercase tracking-[0.12em] text-[#334155]">
                 Action History ({history.length})
               </p>
               <ActionHistoryList

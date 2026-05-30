@@ -1,14 +1,20 @@
 import { ApplicantDashboard } from "@/components/dashboard/applicant-dashboard";
+import { getDashboardData } from "@/lib/data/dashboard";
 import { hasMapboxConfig } from "@/lib/env";
+import { requireSession } from "@/lib/require-session";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const session = await requireSession();
+  const data = await getDashboardData(
+    session.user.id,
+    session.user.organizationId,
+  );
+
   return (
     <ApplicantDashboard
-      initialApplicants={[]}
-      organization={null}
-      user={{}}
-      billingEnabled={false}
-      addressLookupEnabled={hasMapboxConfig()}
+      initialApplicants={data.applicants}
+      organization={data.organization}
+      user={session.user}
     />
   );
 }

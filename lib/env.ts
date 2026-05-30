@@ -9,7 +9,11 @@ export const env = {
   openAiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
   mapboxAccessToken: process.env.MAPBOX_ACCESS_TOKEN || "",
   stripeSecretKey: process.env.STRIPE_SECRET_KEY || "",
+  stripeStarterPriceId: process.env.STRIPE_STARTER_PRICE_ID || "",
   stripeProPriceId: process.env.STRIPE_PRO_PRICE_ID || "",
+  stripeBusinessPriceId: process.env.STRIPE_BUSINESS_PRICE_ID || "",
+  stripeEnterprisePriceId: process.env.STRIPE_ENTERPRISE_PRICE_ID || "",
+  stripePublishableKey: process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "",
   stripeWebhookSecret: process.env.STRIPE_WEBHOOK_SECRET || "",
 };
 
@@ -34,8 +38,19 @@ export function validateEnv() {
 
 export function hasStripeConfig() {
   return Boolean(
-    env.stripeSecretKey && env.stripeProPriceId && env.stripeWebhookSecret,
+    env.stripeSecretKey && env.stripeWebhookSecret,
   );
+}
+
+export function getStripePriceId(plan: "starter" | "pro" | "business" | "enterprise") {
+  const priceIds = {
+    starter: env.stripeStarterPriceId,
+    pro: env.stripeProPriceId,
+    business: env.stripeBusinessPriceId,
+    enterprise: env.stripeEnterprisePriceId,
+  };
+
+  return priceIds[plan] || "";
 }
 
 export function hasMapboxConfig() {

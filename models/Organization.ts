@@ -15,13 +15,30 @@ const organizationSchema = new Schema(
     },
     plan: {
       type: String,
-      enum: ["starter", "pro"],
-      default: "starter",
+      enum: ["free", "starter", "pro", "business", "enterprise"],
+      default: "free",
     },
     billingStatus: {
       type: String,
-      enum: ["inactive", "trialing", "active", "past_due"],
-      default: "inactive",
+      enum: ["free", "inactive", "trialing", "active", "past_due", "canceled", "unpaid"],
+      default: "trialing",
+    },
+    customerType: {
+      type: String,
+      enum: [
+        "Landlord",
+        "Realtor",
+        "Property Manager",
+        "Property Owner",
+        "Leasing Agent",
+        "Real Estate Team",
+        "Other",
+      ],
+      default: "Landlord",
+    },
+    trialEndsAt: {
+      type: Date,
+      default: () => new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
     },
     stripeCustomerId: {
       type: String,

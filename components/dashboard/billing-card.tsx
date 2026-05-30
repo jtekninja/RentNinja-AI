@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { getPlan, planCatalog, type PlanKey } from "@/lib/saas-plans";
 
 type BillingCardProps = {
   organizationName: string;
@@ -27,16 +28,26 @@ export function BillingCard({
   async function trigger(
     endpoint: "/api/billing/checkout" | "/api/billing/portal",
     type: "checkout" | "portal",
+    targetPlan?: PlanKey,
   ) {
     setPendingAction(type);
     setMessage("");
 
     try {
-      const response = await fetch(endpoint, { method: "POST" });
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: targetPlan ? JSON.stringify({ plan: targetPlan }) : undefined,
+      });
       const data = await response.json();
 
       if (!response.ok) {
         setMessage(data.message || "Unable to open billing.");
+        return;
+      }
+
+      if (data.demoMode) {
+        setMessage(data.message || "Billing is running in demo mode.");
         return;
       }
 
@@ -48,51 +59,53 @@ export function BillingCard({
     }
   }
 
-  const isProPlan = plan === "pro";
-  const canUpgrade = billingEnabled && !isProPlan;
+  const currentPlan = getPlan(plan);
   const canOpenPortal = billingEnabled && hasBillingCustomer;
+  const upgradePlans = (["starter", "pro", "business", "enterprise"] as PlanKey[]).filter(
+    (item) => item !== currentPlan.key,
+  );
 
   return (
-    <section className="rounded-[32px] border border-white/10 bg-white/5 p-5">
+    <section className="dashboard-card p-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <p className="text-xs uppercase tracking-[0.24em] text-[#f7b36d]">
+          <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#ff4b1f]">
             Billing
           </p>
-          <h3 className="mt-2 text-xl font-semibold text-white">
+          <h3 className="mt-2 text-xl font-bold text-[#071126]">
             {organizationName}
           </h3>
-          <p className="mt-1 text-sm text-slate-300">
+          <p className="mt-1 text-sm font-medium leading-6 text-[#334155]">
             {!billingEnabled
-              ? "Billing is in demo mode right now. Add Stripe keys and a live price ID to turn on real checkout and portal actions."
-              : isProPlan
-                ? "This workspace is already marked as Pro. There are not separate Pro-only product features wired yet."
-                : "This workspace is on Starter. When Stripe is configured, you can upgrade it to Pro from here."}
+              ? "Billing is in demo mode right now. Add Stripe keys and live price IDs to turn on real checkout and portal actions."
+              : "Manage subscription status, applicant limits, and upgrades for this workspace."}
           </p>
         </div>
-        <StatusPill tone={plan === "pro" ? "strong" : "neutral"}>
-          {plan}
+        <StatusPill tone={currentPlan.key !== "free" ? "strong" : "neutral"}>
+          {currentPlan.name}
         </StatusPill>
       </div>
 
-      <div className="mt-4 flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-3">
+      <div className="mt-4 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <StatusPill tone={billingStatus === "active" ? "strong" : "review"}>
           {billingStatus}
         </StatusPill>
-        {!isProPlan ? (
+        {upgradePlans.map((upgradePlan) => (
           <Button
-            onClick={() => trigger("/api/billing/checkout", "checkout")}
-            disabled={pendingAction === "checkout" || !canUpgrade}
+            key={upgradePlan}
+            onClick={() =>
+              trigger("/api/billing/checkout", "checkout", upgradePlan)
+            }
+            disabled={pendingAction === "checkout"}
           >
-            {pendingAction === "checkout" ? "Opening..." : "Upgrade to Pro"}
+            {pendingAction === "checkout"
+              ? "Opening..."
+              : `Choose ${planCatalog[upgradePlan].name}`}
           </Button>
-        ) : (
-          <Button disabled variant="secondary">
-            Pro plan active
-          </Button>
-        )}
+        ))}
         <Button
           variant="secondary"
+          className="!border !border-[#94a3b8] !bg-white !text-[#071126] !ring-0 hover:!border-[#ff4b1f] hover:!bg-[#f8fafc] hover:!text-[#ff4b1f]"
           onClick={() => trigger("/api/billing/portal", "portal")}
           disabled={pendingAction === "portal" || !canOpenPortal}
         >
@@ -104,19 +117,27 @@ export function BillingCard({
         </Button>
       </div>
 
-      <div className="mt-4 grid gap-2 text-sm text-slate-300">
-        <p>
-          `Starter` and `Pro` are currently billing labels, not different app
-          capabilities.
-        </p>
-        <p>
-          `Pro` becomes meaningful once Stripe-backed subscriptions and
-          entitlement rules are fully connected.
-        </p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        {Object.values(planCatalog)
+          .map((item) => (
+            <div
+              key={item.key}
+              className="rounded-[18px] border border-[#b8c4d4] bg-white p-4"
+            >
+              <p className="text-sm font-bold text-[#071126]">
+                {item.name} · {item.priceLabel}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-[#475569]">
+                {item.applicantLimit
+                  ? `${item.applicantLimit} applicants/month`
+                  : "Unlimited applicants"}
+              </p>
+            </div>
+          ))}
       </div>
 
       {message ? (
-        <p className="mt-4 text-sm text-amber-100">{message}</p>
+        <p className="mt-4 text-sm font-semibold text-amber-700">{message}</p>
       ) : null}
     </section>
   );

@@ -28,23 +28,23 @@ export function OverrideDialog({
   }
 
   return (
-    <div className="mt-3 rounded-[22px] border border-amber-400/20 bg-amber-400/5 p-4">
-      <p className="text-xs uppercase tracking-[0.2em] text-amber-300/80 font-semibold">
+    <div className="mt-3 rounded-[18px] border border-amber-300 bg-amber-50 p-4">
+      <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#d97706]">
         Override Recommendation
       </p>
-      <p className="mt-2 text-sm text-slate-200">
-        Override: <span className="text-white font-medium">{title}</span>
+      <p className="mt-2 text-sm font-medium text-[#334155]">
+        Override: <span className="font-semibold text-[#071126]">{title}</span>
       </p>
-      <p className="mt-1 text-xs text-slate-400">
+      <p className="mt-1 text-xs font-medium text-[#475569]">
         System confidence: {confidence}%
       </p>
 
       <div className="mt-3">
-        <label className="text-xs text-slate-400 block mb-1">
+        <label className="mb-1 block text-xs font-bold text-[#071126]">
           Reason for override (optional):
         </label>
         <textarea
-          className="dark-field w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white placeholder-slate-500 outline-none focus:border-[#f7b36d]/60 resize-none"
+          className="w-full resize-none rounded-xl border border-[#94a3b8] bg-white px-3 py-2 text-sm font-medium text-[#071126] outline-none placeholder:text-[#475569] focus:border-[#ff4b1f]"
           placeholder="Why are you overriding this recommendation?"
           rows={2}
           value={reason}
@@ -56,14 +56,14 @@ export function OverrideDialog({
         <button
           onClick={onCancel}
           disabled={pending}
-          className="rounded-full border border-white/10 bg-white/5 px-4 py-1.5 text-xs text-slate-300 hover:bg-white/10 transition-colors disabled:opacity-50"
+          className="rounded-full border border-[#94a3b8] bg-white px-4 py-1.5 text-xs font-bold text-[#334155] transition-colors hover:border-[#ff4b1f] hover:bg-[#f8fafc] hover:text-[#ff4b1f] disabled:opacity-80"
         >
           Cancel
         </button>
         <button
           onClick={handleConfirm}
           disabled={pending}
-          className="rounded-full border border-amber-400/30 bg-amber-400/10 px-4 py-1.5 text-xs font-semibold text-amber-300 hover:bg-amber-400/20 transition-colors disabled:opacity-50"
+          className="rounded-full border border-amber-300 bg-white px-4 py-1.5 text-xs font-bold text-[#d97706] transition-colors hover:bg-amber-100 disabled:opacity-80"
         >
           {pending ? "Saving..." : "Confirm override"}
         </button>

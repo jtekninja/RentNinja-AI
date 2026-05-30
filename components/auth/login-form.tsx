@@ -30,7 +30,9 @@ export function LoginForm() {
     });
 
     if (result?.error) {
-      setError("Invalid email or password.");
+      setError(
+        "Invalid email or password. If you haven't logged in before, register first, or contact the admin to have your account created.",
+      );
       setPending(false);
       return;
     }
@@ -83,7 +85,9 @@ export function LoginForm() {
         />
       </label>
 
-      {error ? <p className="text-sm font-semibold text-rose-600">{error}</p> : null}
+      {error ? (
+        <p className="text-sm font-semibold text-rose-600">{error}</p>
+      ) : null}
 
       <Button type="submit" disabled={pending}>
         {pending ? "Signing in..." : "Sign in"}

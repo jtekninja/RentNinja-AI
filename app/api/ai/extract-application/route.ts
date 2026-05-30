@@ -12,7 +12,6 @@ import { checkRateLimit, rateLimitResponse } from "@/lib/rate-limit";
 import {
   badRequest,
   unauthorized,
-  unavailable,
   internalError,
 } from "@/lib/api-error";
 
@@ -65,6 +64,49 @@ function inferPhone(value: string, text: string) {
   return match ? match[0].trim() : "";
 }
 
+function buildDemoExtraction(sourceText: string) {
+  const email = inferEmail("", sourceText);
+  const phone = inferPhone("", sourceText);
+  const nameMatch = sourceText.match(/(?:name|applicant)\s*[:\-]\s*([A-Z][A-Za-z\s.'-]{2,})/i);
+  const rentMatch = sourceText.match(/(?:rent|monthly rent)\D+(\d[\d,]*(?:\.\d{2})?)/i);
+  const incomeMatch = sourceText.match(/(?:income|household income)\D+(\d[\d,]*(?:\.\d{2})?)/i);
+
+  return {
+    name: nameMatch?.[1]?.trim() || "",
+    email,
+    phone,
+    propertyAddress: "",
+    propertyPostalCode: "",
+    moveInDate: "",
+    coApplicants: [],
+    monthlyRent: rentMatch ? Number(rentMatch[1].replace(/,/g, "")) : 0,
+    monthlyIncome: incomeMatch ? Number(incomeMatch[1].replace(/,/g, "")) : 0,
+    housingSupport: sourceText.toLowerCase().includes("voucher") ? "Voucher" : "None",
+    supportProgram: sourceText.toLowerCase().includes("voucher") ? "Voucher or subsidy noted" : "",
+    monthlySubsidyAmount: 0,
+    tenantPortionRent: 0,
+    subsidyStatus: sourceText.toLowerCase().includes("voucher") ? "Pending" : "N/A",
+    inspectionStatus: "N/A",
+    residentScore: 0,
+    rentalHistoryScore: 0,
+    rulesComplianceScore: 0,
+    timelineScore: 0,
+    communicationScore: 0,
+    documentationScore: 0,
+    applicationSource: inferApplicationSource("", sourceText),
+    status: "New",
+    notes: [
+      "Demo AI extraction was used because OPENAI_API_KEY is not configured.",
+      "Review all extracted fields before saving the applicant.",
+    ],
+    missingItems: [
+      "Confirm identity, income documentation, landlord references, and any required program paperwork.",
+    ],
+    extractionSummary:
+      "Demo extraction created a draft from pasted text and basic patterns. Configure OpenAI for production-grade packet extraction.",
+  };
+}
+
 export async function POST(request: Request) {
   const session = await auth();
   if (!session?.user) return unauthorized(request);
@@ -74,10 +116,6 @@ export async function POST(request: Request) {
   if (!ipCheck.allowed) return rateLimitResponse(ipCheck);
   const userCheck = checkRateLimit(request, AI_EXTRACT_LIMIT, session.user.id);
   if (!userCheck.allowed) return rateLimitResponse(userCheck);
-
-  if (!hasOpenAIConfig()) {
-    return unavailable(request, "OpenAI API key is not configured.");
-  }
 
   try {
     await dbConnect();
@@ -135,6 +173,10 @@ export async function POST(request: Request) {
 
   if (!hasFile && !hasSourceText) {
     return badRequest(request, "Upload a file or paste application text.");
+  }
+
+  if (!hasOpenAIConfig()) {
+    return NextResponse.json(buildDemoExtraction(sourceText));
   }
 
   const supportedMimeTypes = [

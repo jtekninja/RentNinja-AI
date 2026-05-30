@@ -12,7 +12,7 @@ try {
   });
 } catch (error) {
   console.warn(
-    `Could not remove ${nextDir}. If this is Windows EPERM, stop any running Next processes and delete .next before rebuilding.`,
+    `[Warning] Could not remove ${nextDir}: ${error.message}.\n` +
+      `If this is a Windows EPERM permission lock, you may need to stop any running dev servers, or Next.js will overwrite existing files in-place during compile.`
   );
-  throw error;
 }

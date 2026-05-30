@@ -5,20 +5,19 @@ declare module "next-auth" {
     user: DefaultSession["user"] & {
       id: string;
       organizationId: string;
-      role: "owner" | "member";
+      role: "owner" | "admin" | "member" | "viewer";
     };
   }
 
   interface User {
     organizationId: string;
-    role: "owner" | "member";
+    role: "owner" | "admin" | "member" | "viewer";
   }
 }
 
 declare module "next-auth/jwt" {
   interface JWT {
     organizationId?: string;
-    role?: "owner" | "member";
+    role?: "owner" | "admin" | "member" | "viewer";
   }
 }
-

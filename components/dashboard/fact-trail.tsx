@@ -16,16 +16,16 @@ export function FactTrail({ explainability }: FactTrailProps) {
       {explainability.map((item, i) => (
         <div
           key={`${item.rule}-${i}`}
-          className="rounded-xl border border-white/6 bg-black/20 px-3 py-2 text-xs text-slate-400"
+          className="rounded-xl border border-[#b8c4d4] bg-[#f8fafc] px-3 py-2 text-xs font-medium text-[#334155]"
         >
-          <p className="font-mono text-[11px] text-slate-500 uppercase tracking-wider">
+          <p className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#475569]">
             Rule: {item.rule}
           </p>
           <div className="mt-1.5 space-y-1">
             {Object.entries(item.facts).map(([key, value]) => (
               <div key={key} className="flex justify-between gap-3">
-                <span className="text-slate-500">{key}</span>
-                <span className="font-mono text-slate-300 text-right">
+                <span className="text-[#475569]">{key}</span>
+                <span className="text-right font-mono text-[#071126]">
                   {value === null || value === undefined
                     ? "—"
                     : typeof value === "boolean"
@@ -39,9 +39,9 @@ export function FactTrail({ explainability }: FactTrailProps) {
           </div>
           {item.policyThreshold !== undefined &&
           item.policyThreshold !== null ? (
-            <div className="mt-1.5 border-t border-white/5 pt-1.5">
-              <span className="text-slate-500">Threshold: </span>
-              <span className="font-mono text-amber-300/80">
+            <div className="mt-1.5 border-t border-[#b8c4d4] pt-1.5">
+              <span className="text-[#475569]">Threshold: </span>
+              <span className="font-mono font-bold text-[#d97706]">
                 {typeof item.policyThreshold === "object"
                   ? JSON.stringify(item.policyThreshold)
                   : String(item.policyThreshold)}

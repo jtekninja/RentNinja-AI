@@ -4,12 +4,31 @@ export const applicationSourceValues = ["Apartments.com", "Zillow", "TurboTenant
 export const housingSupportValues = ["None", "Voucher", "Subsidy"] as const;
 export const verificationStatusValues = ["N/A", "Pending", "Verified"] as const;
 export const inspectionStatusValues = ["N/A", "Pending", "Passed", "Failed"] as const;
+export const customerTypeValues = ["Landlord", "Realtor", "Property Manager", "Property Owner", "Leasing Agent", "Real Estate Team", "Other"] as const;
+export const applicantStatusValues = [
+  "New",
+  "Pre-screening",
+  "Missing Documents",
+  "Ready for Review",
+  "Tour Scheduled",
+  "Owner Review",
+  "Strong Candidate",
+  "Manual Review",
+  "Approved",
+  "Declined",
+  "Leased",
+  "Archived",
+  "Screening",
+  "Review",
+  "Rejected"
+] as const;
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
   email: z.email("Enter a valid email address.").transform((value) => value.toLowerCase()),
   password: z.string().min(8, "Password must be at least 8 characters."),
-  organizationName: z.string().trim().min(2, "Organization name is required.")
+  organizationName: z.string().trim().min(2, "Organization name is required."),
+  customerType: z.enum(customerTypeValues).default("Landlord")
 });
 
 export const adminUserCreateSchema = z.object({
@@ -103,7 +122,7 @@ export const applicantSchema = z.object({
   documentationScore: z.coerce.number().min(0).max(100),
   applicationSource: z.enum(applicationSourceValues).default("Email / Manual"),
   notes: z.union([z.string().trim().max(5000), z.array(z.string().trim().min(1).max(500))]).optional().default(""),
-  status: z.enum(["New", "Screening", "Approved", "Review", "Rejected"]).default("New")
+  status: z.enum(applicantStatusValues).default("New")
 });
 
 export type ApplicantInput = z.infer<typeof applicantSchema>;

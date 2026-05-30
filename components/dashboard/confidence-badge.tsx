@@ -16,9 +16,9 @@ export function ConfidenceBadge({
   const tone = confidence >= 85 ? "high" : confidence >= 65 ? "medium" : "low";
 
   const colors = {
-    high: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-    medium: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-    low: "border-rose-400/30 bg-rose-400/10 text-rose-200",
+    high: "border-emerald-300 bg-emerald-50 text-[#059669]",
+    medium: "border-amber-300 bg-amber-50 text-[#d97706]",
+    low: "border-rose-300 bg-rose-50 text-[#dc2626]",
   };
 
   const labels = {
@@ -29,7 +29,7 @@ export function ConfidenceBadge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wider ${colors[tone]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider ${colors[tone]} ${className}`}
     >
       <span
         className={`h-1.5 w-1.5 rounded-full ${

@@ -22,7 +22,7 @@ export function Logo({ href }: LogoProps) {
         <p className="font-[var(--font-display)] text-2xl font-black italic tracking-tight text-[#0b1224] sm:text-3xl">
           Rent<span className="text-[#f0441a]">Ninja</span>
         </p>
-        <span className="rounded-md border border-[#ff5a1f] px-1.5 py-0.5 text-xs font-bold text-[#ff4f16]">
+        <span className="rounded-md border border-[#ff4b1f] px-1.5 py-0.5 text-xs font-bold text-[#ff4b1f]">
           AI
         </span>
       </div>

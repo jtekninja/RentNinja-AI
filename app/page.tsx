@@ -5,6 +5,7 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { SiteHeader } from "@/components/marketing/site-header";
 import { SiteFooter } from "@/components/marketing/site-footer";
+import { BrandBackground } from "@/components/ui/brand-background";
 
 export default async function HomePage() {
   const session = await auth();
@@ -14,62 +15,58 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#eef4ff] text-[#081026]">
-      <div className="mx-auto min-h-screen w-full max-w-[1560px] px-4 py-4 sm:px-6 lg:px-7">
-        <div className="overflow-hidden rounded-[28px] border border-[#d7dfed] bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(247,250,255,0.94))] shadow-[0_30px_90px_rgba(33,52,92,0.16)]">
-          <div className="relative isolate min-h-[980px] overflow-hidden px-5 pb-8 pt-4 sm:px-7 lg:px-8">
-            <Image
-              src="/rentninja_background1.png"
-              alt=""
-              fill
-              priority
-              sizes="100vw"
-              className="pointer-events-none -z-30 object-cover opacity-85"
-              style={{ objectPosition: "center 58%" }}
-            />
-            <div className="absolute inset-0 -z-20 bg-[linear-gradient(90deg,rgba(255,255,255,0.98)_0%,rgba(255,255,255,0.9)_34%,rgba(255,255,255,0.22)_62%,rgba(255,247,242,0.46)_100%)]" />
-            <div className="pointer-events-none absolute inset-x-0 top-[16%] -z-10 h-[420px] bg-[radial-gradient(ellipse_at_64%_68%,rgba(255,94,24,0.34)_0%,rgba(255,143,64,0.22)_22%,rgba(255,181,111,0.1)_38%,transparent_62%)]" />
-            <div className="pointer-events-none absolute inset-x-0 bottom-[34%] -z-10 hidden h-[220px] bg-[radial-gradient(ellipse_at_62%_55%,rgba(255,86,19,0.22)_0%,rgba(255,139,51,0.12)_34%,transparent_68%)] blur-sm lg:block" />
+    <main className="min-h-screen overflow-x-hidden bg-[#eef4ff] text-[#081026]">
+      {/* Micro-animation CSS style block */}
+      <style
+        dangerouslySetInnerHTML={{
+          __html: `
+        @keyframes float {
+          0% { transform: translateY(0px); }
+          50% { transform: translateY(-12px); }
+          100% { transform: translateY(0px); }
+        }
+        .animate-float {
+          animation: float 4.5s ease-in-out infinite;
+        }
+        .hero-logo-art {
+          background: transparent;
+          border: 0;
+          box-shadow: none;
+          outline: 0;
+          filter: none;
+          mask-image: radial-gradient(circle at center, #000 0%, #000 68%, transparent 84%);
+          -webkit-mask-image: radial-gradient(circle at center, #000 0%, #000 68%, transparent 84%);
+        }
+      `,
+        }}
+      />
 
+      <div className="mx-auto min-h-screen w-full max-w-[1560px] px-4 py-4 sm:px-6 lg:px-7">
+        <div className="overflow-hidden rounded-[28px] border border-[#dbe2ee] bg-white shadow-[0_30px_90px_rgba(33,52,92,0.12)]">
+          <div className="relative isolate overflow-hidden px-5 pb-8 pt-4 sm:px-7 lg:px-8 bg-[linear-gradient(180deg,rgba(255,255,255,0.9),rgba(247,250,255,0.94))]">
+            <BrandBackground variant="public" priority />
             <SiteHeader />
 
-            <section className="relative grid gap-8 pb-5 pt-10 lg:min-h-[560px] lg:grid-cols-[0.88fr_1.12fr] lg:items-center">
-              <div className="pointer-events-none absolute bottom-[18px] left-[39%] right-[-4%] z-0 hidden h-[260px] overflow-hidden lg:block">
-                <div
-                  className="absolute inset-0 opacity-85"
-                  style={{
-                    backgroundImage: "url('/rentninja_background1.png')",
-                    backgroundPosition: "center 72%",
-                    backgroundRepeat: "no-repeat",
-                    backgroundSize: "980px auto",
-                    maskImage:
-                      "linear-gradient(90deg, transparent 0%, black 16%, black 78%, transparent 100%), linear-gradient(180deg, transparent 0%, black 22%, black 76%, transparent 100%)",
-                    maskComposite: "intersect",
-                    WebkitMaskImage:
-                      "linear-gradient(90deg, transparent 0%, black 16%, black 78%, transparent 100%), linear-gradient(180deg, transparent 0%, black 22%, black 76%, transparent 100%)",
-                    WebkitMaskComposite: "source-in",
-                  }}
-                />
-                <div className="absolute inset-x-[8%] bottom-8 h-[120px] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,79,22,0.34)_0%,rgba(255,157,77,0.18)_40%,transparent_72%)] blur-md" />
-              </div>
-              <div className="relative z-10 max-w-[620px]">
+            {/* HERO SECTION — two-column grid: copy left, visual right */}
+            <section className="min-w-0 pb-8 pt-10 lg:grid lg:grid-cols-[minmax(0,0.9fr)_minmax(520px,1.1fr)] lg:items-center lg:gap-10">
+              {/* Left Column — Eyebrow, Headline, CTA only */}
+              <div className="relative z-10 w-full min-w-0 max-w-[300px] overflow-visible min-[390px]:max-w-[318px] sm:max-w-full lg:max-w-[620px]">
                 <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[#ff4f16]">
                   RentNinja AI
                 </p>
-                <h1 className="mt-4 text-[2.35rem] font-black leading-[1.02] tracking-tight text-[#070d24] sm:text-5xl lg:text-[2.55rem] xl:text-[2.95rem]">
-                  Automated tenant screening that helps landlords compare
-                  applicants and choose the{" "}
-                  <span className="relative inline-block text-[#ff4f16]">
-                    best renter
+                <h1 className="mt-4 max-w-full text-[2.05rem] font-black leading-[1.05] tracking-tight text-[#070d24] min-[390px]:text-[2.18rem] sm:text-5xl lg:text-[2.55rem] xl:text-[2.95rem]">
+                  <span className="block sm:inline">Pick the strongest</span>{" "}
+                  <span className="block sm:inline">rental applicant</span>{" "}
+                  <span className="relative inline-block break-words text-[#ff4f16]">
+                    faster
                     <span className="absolute -bottom-1 left-0 h-1 w-full rounded-full bg-[#ff4f16]" />
-                  </span>{" "}
-                  with confidence.
+                  </span>
+                  .
                 </h1>
-                <p className="mt-4 max-w-[560px] text-base leading-7 text-[#364154]">
-                  Score every applicant, rank the strongest tenants, flag risky
-                  files, track status from lead to lease, and keep every
-                  property team&apos;s records organized inside one mobile-ready
-                  workspace.
+                <p className="mt-4 max-w-full text-base leading-7 text-[#364154] lg:max-w-[560px]">
+                  RentNinja AI turns messy applications, messages, and
+                  documents into ranked applicants, missing-document checklists,
+                  owner-ready reports, and follow-up messages.
                 </p>
 
                 <div className="mt-5 flex flex-wrap items-center gap-4">
@@ -79,7 +76,7 @@ export default async function HomePage() {
                   >
                     Create Workspace
                     <span className="grid h-7 w-7 place-items-center rounded-full bg-white text-[#ff4f16]">
-                      -&gt;
+                      {"->"}
                     </span>
                   </Link>
                 </div>
@@ -90,59 +87,137 @@ export default async function HomePage() {
                     href="/login"
                     className="font-extrabold text-[#ff4f16] hover:text-[#d9320d]"
                   >
-                    Sign in &gt;
+                    Sign in {">"}
                   </Link>
                 </p>
               </div>
 
-              <div className="relative z-0 min-h-[320px] lg:min-h-[500px]">
-                <div className="absolute left-[6%] right-[4%] top-[42%] hidden h-[150px] rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,86,19,0.28)_0%,rgba(255,149,70,0.16)_34%,transparent_72%)] blur-xl lg:block" />
-                <div className="absolute left-[6%] top-[2%] hidden h-16 w-16 place-items-center rounded-full bg-white/80 text-[#ff4f16] shadow-[0_18px_38px_rgba(31,49,83,0.13)] backdrop-blur md:grid">
+              {/* Right Column — Hero Visual (contained city bg + ninja logo) */}
+              <div className="relative z-0 mt-8 min-h-[420px] w-full max-w-[300px] overflow-hidden rounded-[24px] border border-[#dbe2ee] bg-white shadow-[0_20px_50px_rgba(31,49,83,0.06)] min-[390px]:max-w-[318px] sm:max-w-full lg:mt-0 lg:min-h-[520px]">
+                {/* 1. Road/City Background Image (Contained inside this wrapper only) */}
+                <Image
+                  src="/rentninja_background1.png"
+                  alt="RentNinja City Background"
+                  fill
+                  priority
+                  sizes="(max-width: 768px) 100vw, 50vw"
+                  className="pointer-events-none object-cover opacity-95 z-0"
+                  style={{
+                    objectPosition: "center 72%",
+                  }}
+                />
+
+                {/* 2. Seamless Gradients to blend the background edges cleanly */}
+                {/* Left side soft fade */}
+                <div className="absolute inset-y-0 left-0 w-32 bg-gradient-to-r from-white via-white/80 to-transparent z-10 pointer-events-none" />
+                {/* Bottom side soft fade */}
+                <div className="absolute inset-x-0 bottom-0 h-28 bg-gradient-to-t from-white via-white/60 to-transparent z-10 pointer-events-none" />
+                {/* Top side soft fade */}
+                <div className="absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-white to-transparent z-10 pointer-events-none" />
+
+                {/* 3. Floating Interactive Badges */}
+                {/* Shield Badge - Upper Left */}
+                <div className="absolute left-[12%] top-[14%] z-[25] grid h-14 w-14 place-items-center rounded-full border border-[#ffeedd] bg-white/94 text-[#ff4f16] shadow-[0_12px_32px_rgba(255,79,22,0.18)] backdrop-blur transition duration-300 hover:scale-105">
                   <ShieldIcon />
                 </div>
-                <div className="absolute right-[5%] top-[34%] hidden h-16 w-16 place-items-center rounded-full bg-white/80 text-[#ff4f16] shadow-[0_18px_38px_rgba(31,49,83,0.13)] backdrop-blur md:grid">
-                  <UsersIcon />
-                </div>
-                <div className="absolute left-1/2 top-[42%] h-[360px] w-[560px] max-w-[95vw] -translate-x-1/2 -translate-y-1/2 overflow-hidden lg:h-[500px] lg:w-[760px]">
-                  <Image
-                    src="/rentninja_ai_logo2_transparent.png"
-                    alt="RentNinja AI mark"
-                    width={485}
-                    height={433}
-                    priority
-                    className="absolute left-1/2 top-[-4%] h-auto w-[112%] max-w-none -translate-x-1/2 mix-blend-multiply drop-shadow-[0_32px_42px_rgba(74,35,22,0.24)]"
-                    style={{
-                      clipPath: "inset(0 0 37% 0)",
-                      filter: "saturate(1.12) contrast(1.04)",
-                      maskImage:
-                        "radial-gradient(ellipse at 50% 38%, black 0%, black 54%, rgba(0,0,0,0.84) 64%, transparent 82%)",
-                      WebkitMaskImage:
-                        "radial-gradient(ellipse at 50% 38%, black 0%, black 54%, rgba(0,0,0,0.84) 64%, transparent 82%)",
-                    }}
-                  />
+
+                {/* 4. Large Floating Ninja / Logo Artwork */}
+                <div className="absolute inset-0 z-20 grid place-items-center p-4">
+                  <div className="hero-logo-art relative h-[340px] w-[340px] max-h-[90vw] max-w-[90vw] animate-float md:h-[420px] md:w-[420px]">
+                    <Image
+                      src="/rentninja_ai_logo_clean.png"
+                      alt="RentNinja AI Logo"
+                      fill
+                      priority
+                      sizes="(max-width: 768px) 90vw, 420px"
+                      className="pointer-events-none select-none object-contain"
+                      style={{
+                        objectFit: "contain",
+                        background: "transparent",
+                        border: 0,
+                        boxShadow: "none",
+                        outline: 0,
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </section>
 
-            <section className="grid gap-5 md:grid-cols-3">
+            {/* FEATURE CARDS ROW — horizontal 3-col below hero */}
+            <section className="grid gap-5 md:grid-cols-3 pb-8">
               <FeatureCard
                 icon={<TrophyIcon />}
                 title="Best tenant ranking"
-                body="Automatically compare the whole applicant pool and push the strongest matches to the top."
+                body="Ninja Decision Score and Applicant Readiness Meter show the strongest candidate and what is still missing."
               />
               <FeatureCard
                 icon={<FlagIcon />}
-                title="Red flag detection"
-                body="Spot affordability problems, weak credit, and incomplete files before approving a lease."
+                title="Messy Info Extractor"
+                body="Paste texts, emails, screenshots, or applicant notes and turn them into a clean leasing profile."
               />
               <FeatureCard
                 icon={<TrendIcon />}
-                title="Status tracking"
-                body="Move applicants from new lead to review, approval, and signed lease without losing the thread."
+                title="Owner-ready reports"
+                body="Create professional summaries and follow-up messages without rewriting the same leasing work."
               />
             </section>
 
-            <section className="mt-6 rounded-[24px] border border-[#dbe2ee] bg-white/82 p-5 shadow-[0_20px_48px_rgba(31,49,83,0.1)] backdrop-blur-xl">
+            <section className="grid gap-5 pb-8 lg:grid-cols-[0.9fr,1.1fr]">
+              <div className="rounded-[24px] border border-[#dbe2ee] bg-white/88 p-6 shadow-[0_18px_40px_rgba(31,49,83,0.1)]">
+                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ff4f16]">
+                  Why RentNinja AI is different
+                </p>
+                <h2 className="mt-3 text-3xl font-black text-[#071027]">
+                  Built for messy real-world applicant info.
+                </h2>
+                <div className="mt-4 grid gap-3 text-sm font-semibold leading-6 text-[#364154] sm:grid-cols-2">
+                  {[
+                    "Turns texts, screenshots, and notes into clean profiles",
+                    "Shows the fastest ready candidate",
+                    "Creates owner-ready reports",
+                    "Generates professional follow-up messages",
+                    "Helps users stay organized without spreadsheets",
+                    "Uses Fair Housing Guardrails for safer decision support",
+                  ].map((item) => (
+                    <p key={item} className="rounded-2xl bg-[#f8fafc] px-4 py-3">
+                      {item}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-[24px] border border-[#dbe2ee] bg-white/88 p-6 shadow-[0_18px_40px_rgba(31,49,83,0.1)]">
+                <p className="text-xs font-extrabold uppercase tracking-[0.16em] text-[#ff4f16]">
+                  Demo workflow
+                </p>
+                <h2 className="mt-3 text-3xl font-black text-[#071027]">
+                  From messy message to leasing decision in 60 seconds.
+                </h2>
+                <div className="mt-4 grid gap-2">
+                  {[
+                    "Paste applicant message",
+                    "RentNinja extracts key details",
+                    "AI finds missing documents",
+                    "Ninja Decision Score ranks applicant",
+                    "One-click follow-up message is ready",
+                    "Owner report can be generated",
+                  ].map((item, index) => (
+                    <div
+                      key={item}
+                      className="flex items-center gap-3 rounded-2xl border border-[#dbe2ee] bg-white px-4 py-3 text-sm font-extrabold text-[#172033]"
+                    >
+                      <span className="grid h-7 w-7 place-items-center rounded-full bg-[#ff4f16] text-white">
+                        {index + 1}
+                      </span>
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* DASHBOARD PREVIEW — pipeline snapshot + applicant decision */}
+            <section className="rounded-[24px] border border-[#dbe2ee] bg-white/82 p-5 shadow-[0_20px_48px_rgba(31,49,83,0.1)] backdrop-blur-xl">
               <div className="mb-4 flex items-center gap-2 text-sm font-extrabold uppercase tracking-[0.16em] text-[#172033]">
                 <PulseIcon />
                 Live Pipeline Snapshot
@@ -324,22 +399,19 @@ function ShieldIcon() {
   );
 }
 
-function UsersIcon() {
-  return (
-    <svg className="h-8 w-8" viewBox="0 0 24 24" fill="none">
-      <path d="M8 11a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" />
-      <path d="M16 11a3 3 0 100-6 3 3 0 000 6z" stroke="currentColor" strokeWidth="2" />
-      <path d="M3 20a5 5 0 0110 0" stroke="currentColor" strokeWidth="2" />
-      <path d="M11 20a5 5 0 0110 0" stroke="currentColor" strokeWidth="2" />
-    </svg>
-  );
-}
-
 function TrophyIcon() {
   return (
     <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none">
-      <path d="M8 4h8v4a4 4 0 01-8 0V4z" stroke="currentColor" strokeWidth="2" />
-      <path d="M8 6H4v2a4 4 0 004 4M16 6h4v2a4 4 0 01-4 4M12 12v5M8 21h8M10 17h4" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M8 4h8v4a4 4 0 01-8 0V4z"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
+      <path
+        d="M8 6H4v2a4 4 0 004 4M16 6h4v2a4 4 0 01-4 4M12 12v5M8 21h8M10 17h4"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }
@@ -347,7 +419,11 @@ function TrophyIcon() {
 function FlagIcon() {
   return (
     <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none">
-      <path d="M6 21V4M6 5h11l-2 4 2 4H6" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M6 21V4M6 5h11l-2 4 2 4H6"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }
@@ -375,7 +451,11 @@ function PulseIcon() {
 function UsersMiniIcon() {
   return (
     <svg className="h-5 w-5 text-[#ff4f16]" viewBox="0 0 24 24" fill="none">
-      <path d="M8 11a3 3 0 100-6 3 3 0 000 6zM3 20a5 5 0 0110 0M16 12a3 3 0 100-6M14 20a5 5 0 017 0" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M8 11a3 3 0 100-6 3 3 0 000 6zM3 20a5 5 0 0110 0M16 12a3 3 0 100-6M14 20a5 5 0 017 0"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }
@@ -383,7 +463,10 @@ function UsersMiniIcon() {
 function ShieldMiniIcon() {
   return (
     <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
-      <path d="M12 3l7 3v5c0 4.4-2.7 7.8-7 10-4.3-2.2-7-5.6-7-10V6l7-3z" fill="currentColor" />
+      <path
+        d="M12 3l7 3v5c0 4.4-2.7 7.8-7 10-4.3-2.2-7-5.6-7-10V6l7-3z"
+        fill="currentColor"
+      />
       <path d="M9 12l2 2 4-5" stroke="white" strokeWidth="2" />
     </svg>
   );
@@ -408,7 +491,15 @@ function CheckIcon() {
 function CardIcon() {
   return (
     <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none">
-      <rect x="4" y="6" width="16" height="12" rx="2" stroke="currentColor" strokeWidth="2" />
+      <rect
+        x="4"
+        y="6"
+        width="16"
+        height="12"
+        rx="2"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
       <path d="M4 10h16M8 15h4" stroke="currentColor" strokeWidth="2" />
     </svg>
   );
@@ -418,7 +509,11 @@ function DocIcon() {
   return (
     <svg className="h-7 w-7" viewBox="0 0 24 24" fill="none">
       <path d="M7 3h7l4 4v14H7V3z" stroke="currentColor" strokeWidth="2" />
-      <path d="M14 3v5h5M10 13h5M10 17h5" stroke="currentColor" strokeWidth="2" />
+      <path
+        d="M14 3v5h5M10 13h5M10 17h5"
+        stroke="currentColor"
+        strokeWidth="2"
+      />
     </svg>
   );
 }

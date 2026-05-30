@@ -40,6 +40,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!identifier || !password) {
           logger.warn("Login failed: missing credentials", { identifier });
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              "[DEV AUTH] Login blocked: missing identifier or password",
+            );
+          }
           return null;
         }
 
@@ -50,12 +55,22 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
 
         if (!user?.passwordHash) {
           logger.warn("Login failed: user not found", { identifier });
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[DEV AUTH] Login failed: no user found for "${identifier}". Check that user exists in MongoDB with this email or username.`,
+            );
+          }
           return null;
         }
 
         const isValid = await bcrypt.compare(password, user.passwordHash);
         if (!isValid) {
           logger.warn("Login failed: invalid password", { identifier });
+          if (process.env.NODE_ENV === "development") {
+            console.log(
+              `[DEV AUTH] Login failed: wrong password for "${identifier}".`,
+            );
+          }
           return null;
         }
 
@@ -91,7 +106,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       if (session.user && token.sub && token.organizationId && token.role) {
         session.user.id = token.sub;
         session.user.organizationId = String(token.organizationId);
-        session.user.role = token.role as "owner" | "member";
+        session.user.role = token.role as "owner" | "admin" | "member" | "viewer";
       }
 
       return session;
