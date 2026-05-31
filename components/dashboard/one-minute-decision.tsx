@@ -184,20 +184,144 @@ export function OneMinuteDecision() {
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedApplicantId, setSavedApplicantId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [selectedFileName, setSelectedFileName] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [fileStatus, setFileStatus] = useState("");
+  const [lastReviewInput, setLastReviewInput] = useState("");
+
+  function resetSavedState() {
+    setSavedId(null);
+    setSavedApplicantId(null);
+  }
+
+  function extractionToReviewText(data: Record<string, unknown>) {
+    const lines = [
+      "Extracted applicant packet details:",
+      data.name ? `Applicant name: ${data.name}` : "",
+      data.phone ? `Phone: ${data.phone}` : "",
+      data.email ? `Email: ${data.email}` : "",
+      data.moveInDate ? `Move-in date: ${data.moveInDate}` : "",
+      data.propertyAddress ? `Property: ${data.propertyAddress}` : "",
+      finiteNumber(data.monthlyRent) ? `Monthly rent: $${Number(data.monthlyRent).toLocaleString()}/month` : "",
+      finiteNumber(data.monthlyIncome) ? `Household income: $${Number(data.monthlyIncome).toLocaleString()}/month` : "",
+      data.housingSupport && data.housingSupport !== "None"
+        ? `Voucher/subsidy: ${data.housingSupport}`
+        : "",
+      data.supportProgram ? `Support program: ${data.supportProgram}` : "",
+      finiteNumber(data.tenantPortionRent)
+        ? `Tenant portion: $${Number(data.tenantPortionRent).toLocaleString()}`
+        : "",
+      Array.isArray(data.notes) && data.notes.length
+        ? `Notes:\n${data.notes.join("\n")}`
+        : "",
+      Array.isArray(data.missingItems) && data.missingItems.length
+        ? `Missing items:\n${data.missingItems.join("\n")}`
+        : "",
+      data.extractionSummary ? `Extraction summary: ${data.extractionSummary}` : "",
+    ].filter(Boolean);
+
+    return lines.join("\n");
+  }
+
+  async function extractFilesForReview(sourceText: string) {
+    if (selectedFiles.length === 0) {
+      return "";
+    }
+
+    setFileStatus(`Reading ${selectedFiles.length} uploaded file${selectedFiles.length === 1 ? "" : "s"}...`);
+
+    const textFiles = selectedFiles.filter(
+      (file) => file.type === "text/plain" || file.name.toLowerCase().endsWith(".txt"),
+    );
+    const remoteFiles = selectedFiles.filter((file) =>
+      ["application/pdf", "image/png", "image/jpeg", "image/webp"].includes(file.type),
+    );
+    const unsupportedFiles = selectedFiles.filter(
+      (file) => !textFiles.includes(file) && !remoteFiles.includes(file),
+    );
+
+    if (unsupportedFiles.length > 0) {
+      throw new Error(
+        `RentNinja can read PDF, PNG, JPG, WEBP, and TXT files right now. Convert ${unsupportedFiles
+          .map((file) => file.name)
+          .join(", ")} to PDF or paste the text.`,
+      );
+    }
+
+    const textFileParts = await Promise.all(
+      textFiles.map(async (file) => {
+        const text = await file.text();
+        return `[Text file: ${file.name}]\n${text.trim()}`;
+      }),
+    );
+
+    if (remoteFiles.length === 0) {
+      setFileStatus(`Read ${textFiles.length} text file${textFiles.length === 1 ? "" : "s"}.`);
+      return textFileParts.filter(Boolean).join("\n\n");
+    }
+
+    const formData = new FormData();
+    remoteFiles.forEach((file) => formData.append("files", file));
+    const sourceForExtraction = [sourceText.trim(), ...textFileParts]
+      .filter(Boolean)
+      .join("\n\n");
+    if (sourceForExtraction) {
+      formData.append("sourceText", sourceForExtraction);
+    }
+
+    const response = await fetch("/api/ai/extract-application", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("File extraction failed", {
+        status: response.status,
+        response: data,
+        files: selectedFiles.map((file) => ({
+          name: file.name,
+          type: file.type,
+          size: file.size,
+        })),
+      });
+      throw new Error(data.message || "Unable to read uploaded files.");
+    }
+
+    const extractedText = extractionToReviewText(data);
+    const combinedText = [...textFileParts, extractedText].filter(Boolean).join("\n\n");
+    setFileStatus(
+      combinedText
+        ? `Read ${selectedFiles.length} uploaded file${selectedFiles.length === 1 ? "" : "s"}.`
+        : "Files were uploaded, but no readable applicant details were found.",
+    );
+    return combinedText;
+  }
 
   async function runDecision() {
     setPending(true);
     setError("");
     setSaveError("");
-    setSavedId(null);
-    setSavedApplicantId(null);
+    resetSavedState();
 
     try {
+      const extractedFileText = await extractFilesForReview(input);
+      const reviewInput = [
+        input.trim() ? `Pasted applicant info:\n${input.trim()}` : "",
+        extractedFileText,
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+
+      if (!reviewInput.trim()) {
+        setError("Paste applicant info or upload at least one file first.");
+        return;
+      }
+
+      setLastReviewInput(reviewInput);
       const response = await fetch("/api/ai/one-minute-decision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input }),
+        body: JSON.stringify({ input: reviewInput }),
       });
       const data = await response.json();
 
@@ -301,7 +425,7 @@ export function OneMinuteDecision() {
     const notes = [
       currentResult.bestNextStep ? `Next step: ${currentResult.bestNextStep}` : "",
       currentResult.mainConcern ? `Main concern: ${currentResult.mainConcern}` : "",
-      input ? `Raw pasted text:\n${input}` : "",
+      lastReviewInput ? `Raw reviewed text:\n${lastReviewInput}` : "",
     ].filter(Boolean);
 
     return {
@@ -340,7 +464,7 @@ export function OneMinuteDecision() {
       communicationScore: 70,
       documentationScore: boundedNumber(currentResult.readiness, 0),
       applicationSource: "Email / Manual",
-      rawText: input,
+      rawText: lastReviewInput || input,
       suggestedMessage: currentResult.suggestedMessage,
       extractedFieldSummary: [
         `Income: ${currentResult.householdIncomeDisplay}`,
@@ -447,7 +571,9 @@ export function OneMinuteDecision() {
     setSavedId(null);
     setSavedApplicantId(null);
     setCopied(false);
-    setSelectedFileName("");
+    setSelectedFiles([]);
+    setFileStatus("");
+    setLastReviewInput("");
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -467,14 +593,32 @@ export function OneMinuteDecision() {
     }
   }
 
-  function handleFileChange(file: File | undefined) {
-    if (!file) return;
-    setSelectedFileName(file.name);
-    setInput((current) =>
-      current
-        ? `${current}\n\n[Uploaded file selected: ${file.name}]`
-        : `[Uploaded file selected: ${file.name}]`,
-    );
+  function handleFileChange(files: FileList | null) {
+    const incomingFiles = Array.from(files ?? []);
+    if (incomingFiles.length === 0) return;
+    setSelectedFiles((current) => {
+      const existingKeys = new Set(
+        current.map((file) => `${file.name}-${file.size}-${file.lastModified}`),
+      );
+      const nextFiles = [...current];
+      incomingFiles.forEach((file) => {
+        const key = `${file.name}-${file.size}-${file.lastModified}`;
+        if (!existingKeys.has(key)) {
+          nextFiles.push(file);
+          existingKeys.add(key);
+        }
+      });
+      return nextFiles;
+    });
+    setFileStatus("");
+    resetSavedState();
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  }
+
+  function removeFile(index: number) {
+    setSelectedFiles((current) => current.filter((_, itemIndex) => itemIndex !== index));
+    setFileStatus("");
+    resetSavedState();
   }
 
   return (
@@ -497,8 +641,7 @@ export function OneMinuteDecision() {
             value={input}
             onChange={(event) => {
               setInput(event.target.value);
-              setSavedId(null);
-              setSavedApplicantId(null);
+              resetSavedState();
             }}
             placeholder="Paste applicant message, screening answers, voucher notes, or document text..."
           />
@@ -516,7 +659,8 @@ export function OneMinuteDecision() {
                 type="file"
                 className="sr-only"
                 accept="image/*,.pdf,.txt,.doc,.docx"
-                onChange={(event) => handleFileChange(event.target.files?.[0])}
+                multiple
+                onChange={(event) => handleFileChange(event.target.files)}
               />
               <button
                 type="button"
@@ -525,33 +669,46 @@ export function OneMinuteDecision() {
               >
                 Choose file
               </button>
-              {selectedFileName ? (
-                <span className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-[#b8c4d4] bg-white px-3 py-2 text-xs font-bold text-[#334155]">
-                  <span className="truncate">{selectedFileName}</span>
-                  <button
-                    type="button"
-                    className="shrink-0 text-[#dc2626] hover:text-[#991b1b]"
-                    onClick={() => {
-                      setSelectedFileName("");
-                      if (fileInputRef.current) fileInputRef.current.value = "";
-                    }}
-                  >
-                    Remove
-                  </button>
-                </span>
-              ) : (
+              {selectedFiles.length === 0 ? (
                 <span className="inline-flex min-h-9 items-center rounded-full border border-[#cbd5e1] bg-white px-3 text-xs font-bold text-[#64748b]">
                   No file selected
                 </span>
-              )}
+              ) : null}
             </div>
+            {selectedFiles.length > 0 ? (
+              <div className="mt-3 grid gap-2">
+                {selectedFiles.map((file, index) => (
+                  <span
+                    key={`${file.name}-${file.size}-${file.lastModified}`}
+                    className="inline-flex min-h-11 max-w-full items-center justify-between gap-3 rounded-full border border-[#b8c4d4] bg-white px-3 py-2 text-xs font-bold text-[#334155]"
+                  >
+                    <span className="min-w-0 truncate">
+                      {file.name}
+                      <span className="ml-2 text-[#64748b]">
+                        {(file.size / 1024 / 1024).toFixed(1)} MB
+                      </span>
+                    </span>
+                    <button
+                      type="button"
+                      className="shrink-0 text-[#dc2626] hover:text-[#991b1b]"
+                      onClick={() => removeFile(index)}
+                    >
+                      Remove
+                    </button>
+                  </span>
+                ))}
+              </div>
+            ) : null}
+            {fileStatus ? (
+              <p className="mt-3 text-xs font-bold text-[#0369a1]">{fileStatus}</p>
+            ) : null}
           </div>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <button
               type="button"
               className="btn-primary text-sm"
-              disabled={pending || !input.trim()}
+              disabled={pending || (!input.trim() && selectedFiles.length === 0)}
               onClick={runDecision}
             >
               {pending ? "Reviewing..." : "Run 1-Minute Review"}
