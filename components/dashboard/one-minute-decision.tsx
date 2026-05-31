@@ -2,16 +2,35 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
+import {
+  calculateIncomeToRentRatio,
+  detectIncomeFrequency,
+  formatAffordabilityDisplay,
+  formatIncomeDisplay,
+  formatRentDisplay,
+  normalizeIncomeToMonthly,
+  parseMoneyAmount,
+  parseRentToMonthly,
+  type IncomeFrequency,
+  type NormalizedIncome,
+} from "@/lib/income";
 
-// ── Types ────────────────────────────────────────────────────────────────────
 type DecisionResult = {
   applicantName: string;
   phone: string;
   email: string;
   moveInDate: string;
   monthlyRent: string;
+  monthlyRentAmount: number;
   householdIncome: string;
+  householdIncomeDisplay: string;
+  incomeAmount: number;
+  incomeFrequency: IncomeFrequency;
+  incomeHoursPerWeek?: number;
+  normalizedMonthlyIncome: number | null;
+  affordabilityDisplay: string;
+  incomeWarning?: string | null;
   employmentInfo: string;
   voucherInfo: string;
   tenantPortion: string;
@@ -34,11 +53,9 @@ type DecisionResult = {
   demoMode: boolean;
 };
 
-const exampleText =
-  "Applicant name is Nina Patel. Phone 555-0184, email nina@example.com. Rent is $2450. Household income is $9200. Move-in June 15. Documents received: ID, proof of income, bank statements. Needs landlord reference.";
-
-// ── localStorage helpers ─────────────────────────────────────────────────────
 const STORAGE_KEY = "rentninja:reviewed-applicants";
+const exampleText =
+  "Applicant name is Nina Patel. Phone 555-0184, email nina@example.com. Rent is $2450/month. Household income is $9200/month. Move-in June 15. Documents received: ID, proof of income, bank statements. Needs landlord reference.";
 
 type SavedReview = {
   id: string;
@@ -60,130 +77,119 @@ function loadReviews(): SavedReview[] {
 function saveReview(review: SavedReview) {
   if (typeof window === "undefined") return;
   const reviews = loadReviews();
-  const idx = reviews.findIndex((r) => r.id === review.id);
-  if (idx >= 0) reviews[idx] = review;
+  const index = reviews.findIndex((item) => item.id === review.id);
+  if (index >= 0) reviews[index] = review;
   else reviews.push(review);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(reviews));
 }
 
-function parseMoney(value: string) {
-  const parsed = Number(String(value || "").replace(/[^0-9.]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
+function finiteNumber(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
 }
 
-function normalizeSupport(value: string): "None" | "Voucher" | "Subsidy" {
-  const text = value.toLowerCase();
-  if (text.includes("voucher")) return "Voucher";
-  if (text.includes("subsidy") || text.includes("section 8")) return "Subsidy";
-  return "None";
+function boundedNumber(value: unknown, fallback: number, min = 0, max = 100) {
+  const numeric = finiteNumber(value);
+  if (numeric === null) return fallback;
+  return Math.max(min, Math.min(max, numeric));
 }
 
-function normalizeStatus(value: string) {
-  const allowed = new Set([
-    "New",
-    "Pre-screening",
-    "Missing Documents",
-    "Ready for Review",
-    "Tour Scheduled",
-    "Owner Review",
-    "Strong Candidate",
-    "Manual Review",
-    "Approved",
-    "Declined",
-    "Leased",
-    "Archived",
-    "Screening",
-    "Review",
-    "Rejected",
-  ]);
-  return allowed.has(value) ? value : "New";
+function truncateForField(value: unknown, maxLength: number) {
+  return String(value ?? "").trim().slice(0, maxLength);
 }
 
-function fallbackName() {
-  return `Unnamed Applicant - ${new Date().toLocaleString()}`;
-}
-
-function usableText(value: string) {
-  const trimmed = value?.trim() ?? "";
-  return /^(not found|not provided|unknown|n\/a)$/i.test(trimmed) ? "" : trimmed;
-}
-
-function buildApplicantPayload(result: DecisionResult, rawInput: string) {
-  const uniqueSuffix = Date.now();
-  const name = usableText(result.applicantName) || fallbackName();
-  const email = usableText(result.email) || `unnamed-${uniqueSuffix}@rentninja.local`;
-  const phone = usableText(result.phone) || `000${String(uniqueSuffix).slice(-7)}`;
-  const monthlyRent = parseMoney(result.monthlyRent);
-  const monthlyIncome = parseMoney(result.householdIncome);
-  const housingSupport = normalizeSupport(result.voucherInfo);
-  const tenantPortionRent = parseMoney(result.tenantPortion);
-  const baseScore = Math.max(0, Math.min(100, result.ninjaDecisionScore || 70));
-  const documentationScore = Math.max(0, Math.min(100, result.readiness || baseScore));
-  const notes = [
-    "1-Minute Applicant Review",
-    `Raw pasted applicant text\n${rawInput}`,
-    `Extracted field summary\nName: ${name}\nPhone: ${result.phone || "Not provided"}\nEmail: ${result.email || "Not provided"}\nMove-in: ${result.moveInDate || "Not provided"}\nRent: ${result.monthlyRent || "Not provided"}\nIncome: ${result.householdIncome || "Not provided"}\nVoucher/subsidy: ${result.voucherInfo || "None"}\nTenant portion: ${result.tenantPortion || "Not provided"}\nEmployment/income notes: ${result.employmentInfo || "Not provided"}\nOccupants: ${result.occupants || "Not provided"}\nPets/smoking: ${result.petsSmoking || "Not provided"}`,
-    `Ninja Decision Score\nScore: ${result.ninjaDecisionScore}/100\nReadiness: ${result.readiness}%\nRisk level: ${result.riskLevel}\nConfidence: ${result.confidenceLevel}\nConfidence reason: ${result.confidenceReason}`,
-    `Strengths\n${result.mainStrength || "None identified"}`,
-    `Concerns\n${[result.mainConcern, ...result.redFlagsOrConcerns].filter(Boolean).join("\n") || "None identified"}`,
-    `Missing items\n${result.missingDocuments.join("\n") || "No missing documents detected."}`,
-    `Follow-up questions\n${result.followUpQuestions.join("\n") || "No follow-up questions generated."}`,
-    `Next step\n${result.bestNextStep || result.suggestedStatus || "Review applicant"}`,
-    `Suggested message\n${result.suggestedMessage || "No suggested message generated."}`,
-    email.endsWith("@rentninja.local")
-      ? "System note\nApplicant email was not provided in the pasted text. RentNinja used a placeholder so the record could be saved."
-      : "",
-    phone.startsWith("000")
-      ? "System note\nApplicant phone was not provided in the pasted text. RentNinja used a placeholder so the record could be saved."
-      : "",
-  ].filter(Boolean);
+function normalizeDecisionResult(data: Partial<DecisionResult>): DecisionResult {
+  const incomeAmount =
+    finiteNumber(data.incomeAmount) ??
+    parseMoneyAmount(data.householdIncomeDisplay) ??
+    parseMoneyAmount(data.householdIncome) ??
+    0;
+  const incomeFrequency =
+    data.incomeFrequency && data.incomeFrequency !== "unknown"
+      ? data.incomeFrequency
+      : detectIncomeFrequency(data.householdIncomeDisplay || data.householdIncome);
+  const normalizedMonthlyIncome =
+    finiteNumber(data.normalizedMonthlyIncome) ??
+    normalizeIncomeToMonthly({
+      amount: incomeAmount,
+      frequency: incomeFrequency,
+      hoursPerWeek: finiteNumber(data.incomeHoursPerWeek),
+    });
+  const monthlyRentAmount =
+    finiteNumber(data.monthlyRentAmount) ??
+    parseRentToMonthly(data.monthlyRent) ??
+    0;
+  const incomeData: NormalizedIncome = {
+    amount: incomeAmount > 0 ? incomeAmount : null,
+    frequency: incomeFrequency,
+    hoursPerWeek: finiteNumber(data.incomeHoursPerWeek) ?? undefined,
+    rawText: data.householdIncome ?? "",
+    normalizedMonthly: normalizedMonthlyIncome,
+  };
 
   return {
-    name,
-    email,
-    phone,
-    propertyAddress: "",
-    propertyCity: "",
-    propertyState: "",
-    propertyPostalCode: "",
-    moveInDate: result.moveInDate || "",
-    coApplicants: [],
-    monthlyRent,
-    monthlyIncome,
-    housingSupport,
-    supportProgram: housingSupport === "None" ? "" : result.voucherInfo,
-    monthlySubsidyAmount: 0,
-    tenantPortionRent,
-    subsidyStatus: housingSupport === "None" ? "N/A" : "Pending",
-    inspectionStatus: "N/A",
-    creditScore: 0,
-    residentScore: 0,
-    rentalHistoryScore: baseScore,
-    rulesComplianceScore: baseScore,
-    timelineScore: baseScore,
-    communicationScore: baseScore,
-    documentationScore,
-    applicationSource: "Email / Manual",
-    notes,
-    status: normalizeStatus(result.suggestedStatus),
+    applicantName: data.applicantName || "Applicant from pasted info",
+    phone: data.phone || "",
+    email: data.email || "",
+    moveInDate: data.moveInDate || "",
+    monthlyRent: formatRentDisplay(monthlyRentAmount || null),
+    monthlyRentAmount,
+    householdIncome: data.householdIncome || "Not found",
+    householdIncomeDisplay:
+      incomeAmount > 0
+        ? formatIncomeDisplay(incomeData)
+        : data.householdIncomeDisplay || data.householdIncome || "Not found",
+    incomeAmount,
+    incomeFrequency,
+    incomeHoursPerWeek: finiteNumber(data.incomeHoursPerWeek) ?? undefined,
+    normalizedMonthlyIncome,
+    affordabilityDisplay: formatAffordabilityDisplay(
+      normalizedMonthlyIncome,
+      monthlyRentAmount || null,
+    ),
+    incomeWarning: data.incomeWarning ?? null,
+    employmentInfo: data.employmentInfo || "Not found",
+    voucherInfo: data.voucherInfo || "No voucher/subsidy mentioned",
+    tenantPortion: data.tenantPortion || "Not found",
+    occupants: data.occupants || "Not found",
+    petsSmoking: data.petsSmoking || "Not found",
+    documentsMentioned: data.documentsMentioned ?? [],
+    missingDocuments: data.missingDocuments ?? [],
+    redFlagsOrConcerns: data.redFlagsOrConcerns ?? [],
+    followUpQuestions: data.followUpQuestions ?? [],
+    suggestedStatus: data.suggestedStatus || "New",
+    ninjaDecisionScore: boundedNumber(data.ninjaDecisionScore, 0),
+    readiness: boundedNumber(data.readiness, 0),
+    riskLevel: data.riskLevel || "Medium",
+    confidenceLevel: data.confidenceLevel || "Medium",
+    confidenceReason:
+      data.confidenceReason || "Review generated from pasted applicant information.",
+    mainStrength: data.mainStrength || "Applicant information was organized.",
+    mainConcern: data.mainConcern || "Confirm missing information before deciding.",
+    bestNextStep: data.bestNextStep || "Review missing items.",
+    suggestedMessage: data.suggestedMessage || "",
+    demoMode: Boolean(data.demoMode),
   };
 }
 
-// ── Component ────────────────────────────────────────────────────────────────
 export function OneMinuteDecision() {
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [input, setInput] = useState("");
   const [result, setResult] = useState<DecisionResult | null>(null);
   const [pending, setPending] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saveError, setSaveError] = useState("");
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedApplicantId, setSavedApplicantId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [selectedFileName, setSelectedFileName] = useState("");
 
-  // ── Run AI review ──
   async function runDecision() {
     setPending(true);
     setError("");
+    setSaveError("");
     setSavedId(null);
     setSavedApplicantId(null);
 
@@ -200,68 +206,251 @@ export function OneMinuteDecision() {
         return;
       }
 
-      setResult(data);
+      setResult(normalizeDecisionResult(data));
+    } catch (err) {
+      console.error("1-Minute Review failed", err);
+      setError("Unable to run applicant decision.");
     } finally {
       setPending(false);
     }
   }
 
-  // ── Save applicant to localStorage ──
+  function recalculateAffordability(
+    updates: Partial<
+      Pick<
+        DecisionResult,
+        | "incomeAmount"
+        | "incomeFrequency"
+        | "incomeHoursPerWeek"
+        | "monthlyRentAmount"
+      >
+    >,
+  ) {
+    if (!result) return;
+
+    const incomeAmount = updates.incomeAmount ?? result.incomeAmount ?? 0;
+    const frequency = updates.incomeFrequency ?? result.incomeFrequency ?? "unknown";
+    const hoursPerWeek = updates.incomeHoursPerWeek ?? result.incomeHoursPerWeek;
+    const rentAmount = updates.monthlyRentAmount ?? result.monthlyRentAmount ?? 0;
+    const normalizedMonthly = normalizeIncomeToMonthly({
+      amount: incomeAmount,
+      frequency,
+      hoursPerWeek,
+    });
+    const incomeData: NormalizedIncome = {
+      amount: incomeAmount > 0 ? incomeAmount : null,
+      frequency,
+      hoursPerWeek,
+      rawText: result.householdIncome,
+      normalizedMonthly,
+    };
+
+    setResult({
+      ...result,
+      ...updates,
+      incomeAmount,
+      incomeFrequency: frequency,
+      incomeHoursPerWeek: hoursPerWeek,
+      normalizedMonthlyIncome: normalizedMonthly,
+      affordabilityDisplay: formatAffordabilityDisplay(
+        normalizedMonthly,
+        rentAmount > 0 ? rentAmount : null,
+      ),
+      householdIncomeDisplay:
+        incomeAmount > 0 ? formatIncomeDisplay(incomeData) : "Not found",
+      monthlyRent: formatRentDisplay(rentAmount > 0 ? rentAmount : null),
+      monthlyRentAmount: rentAmount,
+      householdIncome: incomeAmount > 0 ? String(incomeAmount) : "Not found",
+      incomeWarning:
+        frequency === "unknown"
+          ? "Income amount found, but frequency is unclear. Confirm yearly/monthly/hourly before relying on affordability score."
+          : null,
+    });
+  }
+
+  function buildApplicantPayload(currentResult: DecisionResult) {
+    const monthlyRent =
+      parseRentToMonthly(currentResult.monthlyRentAmount || currentResult.monthlyRent) ??
+      0;
+    const incomeAmount =
+      parseMoneyAmount(currentResult.incomeAmount) ??
+      parseMoneyAmount(currentResult.householdIncomeDisplay) ??
+      parseMoneyAmount(currentResult.householdIncome) ??
+      0;
+    const incomeFrequency =
+      currentResult.incomeFrequency !== "unknown"
+        ? currentResult.incomeFrequency
+        : detectIncomeFrequency(
+            `${currentResult.householdIncomeDisplay} ${currentResult.householdIncome}`,
+          );
+    const normalizedMonthlyIncome =
+      finiteNumber(currentResult.normalizedMonthlyIncome) ??
+      normalizeIncomeToMonthly({
+        amount: incomeAmount,
+        frequency: incomeFrequency,
+        hoursPerWeek: finiteNumber(currentResult.incomeHoursPerWeek),
+      });
+    const incomeToRentRatio = calculateIncomeToRentRatio(
+      normalizedMonthlyIncome,
+      monthlyRent || null,
+    );
+    const timestamp = new Date().toLocaleString();
+    const applicantName =
+      truncateForField(currentResult.applicantName, 150) ||
+      `Unnamed Applicant - ${timestamp}`;
+    const notes = [
+      currentResult.bestNextStep ? `Next step: ${currentResult.bestNextStep}` : "",
+      currentResult.mainConcern ? `Main concern: ${currentResult.mainConcern}` : "",
+      input ? `Raw pasted text:\n${input}` : "",
+    ].filter(Boolean);
+
+    return {
+      name: applicantName,
+      email:
+        currentResult.email && currentResult.email.includes("@")
+          ? truncateForField(currentResult.email, 150)
+          : `unknown-${Date.now()}@rentninja.local`,
+      phone: truncateForField(currentResult.phone || "000-000-0000", 50),
+      propertyAddress: "",
+      propertyCity: "",
+      propertyState: "",
+      propertyPostalCode: "",
+      moveInDate: truncateForField(currentResult.moveInDate, 150),
+      coApplicants: [],
+      monthlyRent,
+      monthlyIncome: normalizedMonthlyIncome ?? 0,
+      incomeAmount: incomeAmount || null,
+      incomeFrequency,
+      normalizedMonthlyIncome,
+      incomeToRentRatio,
+      housingSupport:
+        /voucher|subsidy|section 8/i.test(currentResult.voucherInfo)
+          ? "Voucher"
+          : "None",
+      supportProgram: truncateForField(currentResult.voucherInfo, 150),
+      monthlySubsidyAmount: 0,
+      tenantPortionRent: parseMoneyAmount(currentResult.tenantPortion) ?? 0,
+      subsidyStatus: "N/A",
+      inspectionStatus: "N/A",
+      creditScore: 0,
+      residentScore: 0,
+      rentalHistoryScore: 70,
+      rulesComplianceScore: 70,
+      timelineScore: currentResult.moveInDate ? 75 : 60,
+      communicationScore: 70,
+      documentationScore: boundedNumber(currentResult.readiness, 0),
+      applicationSource: "Email / Manual",
+      rawText: input,
+      suggestedMessage: currentResult.suggestedMessage,
+      extractedFieldSummary: [
+        `Income: ${currentResult.householdIncomeDisplay}`,
+        `Rent: ${formatRentDisplay(monthlyRent || null)}`,
+        `Ratio: ${formatAffordabilityDisplay(normalizedMonthlyIncome, monthlyRent || null)}`,
+        `Status: ${currentResult.suggestedStatus}`,
+      ].join("\n"),
+      summary: currentResult.confidenceReason,
+      concerns: currentResult.redFlagsOrConcerns.length
+        ? currentResult.redFlagsOrConcerns
+        : [currentResult.mainConcern].filter(Boolean),
+      strengths: [currentResult.mainStrength].filter(Boolean),
+      missingDocuments: currentResult.missingDocuments,
+      nextStep: currentResult.bestNextStep,
+      confidenceLevel: currentResult.confidenceLevel,
+      confidenceReason: currentResult.confidenceReason,
+      readiness: boundedNumber(currentResult.readiness, 0),
+      riskLevel: currentResult.riskLevel,
+      notes,
+      status: currentResult.suggestedStatus || "New",
+    };
+  }
+
   async function saveApplicant() {
     if (!result) {
-      setError("Generate a review before saving.");
+      setSaveError("Generate a review before saving.");
       return null;
     }
+    if (saving) return null;
 
-    if (savedId && savedApplicantId) {
-      return { reviewId: savedId, applicantId: savedApplicantId };
-    }
-
-    setError("");
+    setSaving(true);
+    setSaveError("");
+    setSavedId(null);
+    setSavedApplicantId(null);
 
     try {
+      const payload = buildApplicantPayload(result);
       const response = await fetch("/api/applicants", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildApplicantPayload(result, input)),
+        body: JSON.stringify(payload),
       });
-      const data = await response.json();
+      const data = await response.json().catch(() => ({}));
 
       if (!response.ok) {
-        throw new Error(data?.message || "Applicant save failed.");
+        console.error("Unable to save applicant", {
+          status: response.status,
+          response: data,
+          payload,
+        });
+        throw new Error(data.message || "Unable to save applicant. Please try again.");
       }
 
-      const review: SavedReview = {
-        id: crypto.randomUUID?.() ?? `review-${Date.now()}`,
-        applicantId: data._id,
+      const applicantId = data?._id || data?.id;
+      if (!applicantId) {
+        console.error("Applicant save did not return an id", data);
+        throw new Error("Unable to save applicant. Please try again.");
+      }
+
+      const verifyResponse = await fetch("/api/applicants", { cache: "no-store" });
+      const verifyData = await verifyResponse.json().catch(() => []);
+      const savedRecord = Array.isArray(verifyData)
+        ? verifyData.find((item) => item?._id === applicantId || item?.id === applicantId)
+        : null;
+
+      if (!verifyResponse.ok || !savedRecord) {
+        console.error("Applicant save verification failed", {
+          status: verifyResponse.status,
+          response: verifyData,
+          applicantId,
+        });
+        throw new Error("Unable to save applicant. Please try again.");
+      }
+
+      const reviewId = crypto.randomUUID?.() ?? `review-${Date.now()}`;
+      saveReview({
+        id: reviewId,
+        applicantId,
         savedAt: new Date().toISOString(),
         rawInput: input,
         result,
-      };
-
-      saveReview(review);
-      setSavedId(review.id);
-      setSavedApplicantId(data._id);
-      router.refresh();
-      return { reviewId: review.id, applicantId: data._id };
+      });
+      setSavedId(reviewId);
+      setSavedApplicantId(applicantId);
+      return applicantId as string;
     } catch (err) {
-      console.error("Unable to save 1-Minute Applicant Review applicant:", err);
-      setError("Unable to save applicant. Please try again.");
+      console.error("Save Applicant failed", err);
+      setSaveError(
+        err instanceof Error
+          ? `Unable to save applicant. Please try again. ${err.message}`
+          : "Unable to save applicant. Please try again.",
+      );
       return null;
+    } finally {
+      setSaving(false);
     }
   }
 
-  // ── Clear / Reset ──
   function clearAll() {
     setInput("");
     setResult(null);
     setError("");
+    setSaveError("");
     setSavedId(null);
     setSavedApplicantId(null);
     setCopied(false);
+    setSelectedFileName("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
-  // ── Copy message ──
   async function copyMessage() {
     if (result?.suggestedMessage) {
       await navigator.clipboard?.writeText(result.suggestedMessage);
@@ -270,27 +459,27 @@ export function OneMinuteDecision() {
     }
   }
 
-  // ── Create owner report (save first, then navigate) ──
   async function createOwnerReport() {
     if (!result) return;
-
-    // Auto-save if not already saved
-    let id = savedId;
-    let applicantId = savedApplicantId;
-    if (!id || !applicantId) {
-      const saved = await saveApplicant();
-      if (!saved) return;
-      id = saved.reviewId;
-      applicantId = saved.applicantId;
+    const applicantId = savedApplicantId ?? (await saveApplicant());
+    if (applicantId) {
+      router.push(`/dashboard/reports?applicantId=${applicantId}`);
     }
+  }
 
-    router.push(`/dashboard/reports?applicantId=${applicantId}&reviewId=${id}`);
+  function handleFileChange(file: File | undefined) {
+    if (!file) return;
+    setSelectedFileName(file.name);
+    setInput((current) =>
+      current
+        ? `${current}\n\n[Uploaded file selected: ${file.name}]`
+        : `[Uploaded file selected: ${file.name}]`,
+    );
   }
 
   return (
     <section id="one-minute" className="dashboard-card p-5">
       <div className="grid gap-5 xl:grid-cols-[0.95fr,1.05fr]">
-        {/* ── Left panel: input ── */}
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
             1-Minute Applicant Review
@@ -299,30 +488,64 @@ export function OneMinuteDecision() {
             Paste messy info. Get the next step.
           </h2>
           <p className="mt-2 text-sm font-semibold leading-6 text-[#334155]">
-            Paste a Zillow reply, text conversation, email, or application
-            notes. RentNinja organizes the details, scores readiness, and drafts
-            the follow-up.
+            Paste a Zillow reply, text conversation, email, or application notes.
+            RentNinja organizes the details, scores readiness, and drafts the
+            follow-up.
           </p>
           <textarea
             className="mt-4 min-h-56 w-full rounded-[18px] border border-[#94a3b8] bg-white px-4 py-3 text-base font-semibold leading-7 text-[#071126] outline-none placeholder:text-[#475569] focus:border-[#ff4b1f] focus:shadow-[0_0_0_3px_rgba(255,75,31,0.22)]"
             value={input}
-            onChange={(event) => setInput(event.target.value)}
+            onChange={(event) => {
+              setInput(event.target.value);
+              setSavedId(null);
+              setSavedApplicantId(null);
+            }}
             placeholder="Paste applicant message, screening answers, voucher notes, or document text..."
           />
-          <label className="mt-3 flex min-h-[54px] cursor-pointer items-center justify-between gap-3 rounded-[16px] border border-dashed border-[#ff9c7f] bg-[#fff0ea] px-4 py-3 text-sm font-black text-[#071126]">
-            <span>Upload file/screenshot placeholder</span>
-            <input
-              type="file"
-              className="max-w-[150px] text-xs font-bold text-[#334155] file:mr-3 file:rounded-full file:border-0 file:bg-[#ff4b1f] file:px-4 file:py-2 file:text-xs file:font-black file:text-white"
-              onChange={() =>
-                setInput((current) =>
-                  current
-                    ? `${current}\n\n[Uploaded packet attached for extraction placeholder]`
-                    : "[Uploaded packet attached for extraction placeholder]",
-                )
-              }
-            />
-          </label>
+
+          <div className="mt-3 rounded-[18px] border border-dashed border-[#b8c4d4] bg-[#f8fafc] p-4">
+            <p className="text-sm font-black text-[#071126]">
+              Upload file or screenshot
+            </p>
+            <p className="mt-1 text-sm font-semibold text-[#475569]">
+              Optional - add a screenshot, application notes, or document.
+            </p>
+            <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="sr-only"
+                accept="image/*,.pdf,.txt,.doc,.docx"
+                onChange={(event) => handleFileChange(event.target.files?.[0])}
+              />
+              <button
+                type="button"
+                className="btn-secondary text-sm"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                Choose file
+              </button>
+              {selectedFileName ? (
+                <span className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-[#b8c4d4] bg-white px-3 py-2 text-xs font-bold text-[#334155]">
+                  <span className="truncate">{selectedFileName}</span>
+                  <button
+                    type="button"
+                    className="shrink-0 text-[#dc2626] hover:text-[#991b1b]"
+                    onClick={() => {
+                      setSelectedFileName("");
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    Remove
+                  </button>
+                </span>
+              ) : (
+                <span className="inline-flex min-h-9 items-center rounded-full border border-[#cbd5e1] bg-white px-3 text-xs font-bold text-[#64748b]">
+                  No file selected
+                </span>
+              )}
+            </div>
+          </div>
 
           <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
             <button
@@ -340,29 +563,19 @@ export function OneMinuteDecision() {
             >
               Use sample
             </button>
-            <button
-              type="button"
-              className="btn-ghost text-sm"
-              onClick={clearAll}
-            >
+            <button type="button" className="btn-ghost text-sm" onClick={clearAll}>
               Clear
             </button>
           </div>
 
           {error ? (
             <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-bold text-[#dc2626]">
-              <p>RentNinja needs your attention.</p>
+              <p>RentNinja could not generate this right now. Try again.</p>
               <p className="mt-1 font-semibold">{error}</p>
             </div>
           ) : null}
-          {savedId ? (
-            <p className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-black text-[#059669]">
-              Applicant saved.
-            </p>
-          ) : null}
         </div>
 
-        {/* ── Right panel: results ── */}
         <div
           id="extractor"
           className="rounded-[22px] border border-[#b8c4d4] bg-[#f8fafc] p-4"
@@ -375,14 +588,9 @@ export function OneMinuteDecision() {
               <h3 className="mt-3 text-2xl font-black text-[#071126]">
                 Checking missing documents and next steps
               </h3>
-              <p className="mx-auto mt-2 max-w-md text-sm font-semibold leading-6 text-[#334155]">
-                RentNinja is extracting details, scoring readiness, and building
-                a simple follow-up message.
-              </p>
             </div>
           ) : result ? (
             <div>
-              {/* Header */}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
@@ -397,36 +605,130 @@ export function OneMinuteDecision() {
                 </div>
               </div>
 
-              {/* Metrics */}
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <DecisionMetric
-                  label="Readiness"
-                  value={`${result.readiness}%`}
-                />
+                <DecisionMetric label="Readiness" value={`${result.readiness}%`} />
                 <DecisionMetric label="Risk" value={result.riskLevel} />
-                <DecisionMetric
-                  label="Confidence"
-                  value={result.confidenceLevel}
-                />
+                <DecisionMetric label="Confidence" value={result.confidenceLevel} />
               </div>
 
-              {/* Confidence reason */}
+              <div className="mt-3 rounded-2xl border border-[#b8c4d4] bg-white p-4">
+                <p className="text-xs font-bold uppercase tracking-wider text-[#475569]">
+                  Affordability
+                </p>
+                <div className="mt-2 space-y-1">
+                  <p className="text-sm font-semibold">
+                    <span className="text-[#475569]">Income: </span>
+                    {result.householdIncomeDisplay}
+                  </p>
+                  <p className="text-sm font-semibold">
+                    <span className="text-[#475569]">Rent: </span>
+                    {formatRentDisplay(result.monthlyRentAmount || null)}
+                  </p>
+                  <p className="text-sm font-bold text-[#ff4b1f]">
+                    Ratio:{" "}
+                    {formatAffordabilityDisplay(
+                      result.normalizedMonthlyIncome,
+                      result.monthlyRentAmount || null,
+                    )}
+                  </p>
+                </div>
+                {result.incomeWarning ? (
+                  <p className="mt-2 text-xs font-medium text-amber-700">
+                    {result.incomeWarning}
+                  </p>
+                ) : null}
+              </div>
+
+              <details className="mt-3 rounded-2xl border border-[#b8c4d4] bg-white p-4">
+                <summary className="cursor-pointer text-xs font-bold uppercase tracking-wider text-[#475569]">
+                  Edit income & rent
+                </summary>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <label className="grid gap-1">
+                    <span className="text-xs font-bold text-[#475569]">
+                      Income amount
+                    </span>
+                    <input
+                      type="number"
+                      className="dashboard-input text-sm"
+                      value={result.incomeAmount || ""}
+                      onChange={(event) =>
+                        recalculateAffordability({
+                          incomeAmount: Number(event.target.value) || 0,
+                        })
+                      }
+                      min="0"
+                    />
+                  </label>
+                  <label className="grid gap-1">
+                    <span className="text-xs font-bold text-[#475569]">
+                      Income frequency
+                    </span>
+                    <select
+                      className="dashboard-input text-sm"
+                      value={result.incomeFrequency}
+                      onChange={(event) =>
+                        recalculateAffordability({
+                          incomeFrequency: event.target.value as IncomeFrequency,
+                        })
+                      }
+                    >
+                      <option value="yearly">Yearly</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="weekly">Weekly</option>
+                      <option value="biweekly">Biweekly</option>
+                      <option value="hourly">Hourly</option>
+                      <option value="unknown">Unknown</option>
+                    </select>
+                  </label>
+                  {result.incomeFrequency === "hourly" ? (
+                    <label className="grid gap-1">
+                      <span className="text-xs font-bold text-[#475569]">
+                        Hours per week
+                      </span>
+                      <input
+                        type="number"
+                        className="dashboard-input text-sm"
+                        value={result.incomeHoursPerWeek ?? 40}
+                        onChange={(event) =>
+                          recalculateAffordability({
+                            incomeHoursPerWeek: Number(event.target.value) || 40,
+                          })
+                        }
+                        min="0"
+                        max="168"
+                      />
+                    </label>
+                  ) : null}
+                  <label className="grid gap-1">
+                    <span className="text-xs font-bold text-[#475569]">
+                      Monthly rent
+                    </span>
+                    <input
+                      type="number"
+                      className="dashboard-input text-sm"
+                      value={result.monthlyRentAmount || ""}
+                      onChange={(event) =>
+                        recalculateAffordability({
+                          monthlyRentAmount: Number(event.target.value) || 0,
+                        })
+                      }
+                      min="0"
+                    />
+                  </label>
+                </div>
+              </details>
+
               <p className="mt-3 rounded-2xl border border-[#b8c4d4] bg-white px-4 py-3 text-sm font-semibold leading-6 text-[#334155]">
                 {result.confidenceReason}
               </p>
 
-              {/* Insights */}
               <div className="mt-4 grid gap-3">
-                <Insight
-                  label="Best next step"
-                  value={result.bestNextStep}
-                  accent
-                />
+                <Insight label="Best next step" value={result.bestNextStep} accent />
                 <Insight label="Main strength" value={result.mainStrength} />
                 <Insight label="Main concern" value={result.mainConcern} />
               </div>
 
-              {/* Missing docs & follow-up */}
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <ListBlock
                   title="Missing documents"
@@ -440,7 +742,6 @@ export function OneMinuteDecision() {
                 />
               </div>
 
-              {/* Extracted fields */}
               <div className="mt-4 rounded-2xl border border-[#b8c4d4] bg-white p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
                   Extracted details
@@ -450,26 +751,20 @@ export function OneMinuteDecision() {
                     ["Phone", result.phone || "Not found"],
                     ["Email", result.email || "Not found"],
                     ["Move-in", result.moveInDate || "Not found"],
-                    ["Rent", result.monthlyRent],
-                    ["Income", result.householdIncome],
+                    ["Employment", result.employmentInfo || "Not found"],
                     ["Voucher/subsidy", result.voucherInfo],
                     ["Tenant portion", result.tenantPortion],
+                    ["Occupants", result.occupants],
                     ["Status", result.suggestedStatus],
                   ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-xl bg-[#f8fafc] px-3 py-2"
-                    >
-                      <span className="font-black text-[#071126]">
-                        {label}:{" "}
-                      </span>
+                    <div key={label} className="rounded-xl bg-[#f8fafc] px-3 py-2">
+                      <span className="font-black text-[#071126]">{label}: </span>
                       {value}
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Suggested message */}
               <div className="mt-4 rounded-2xl border border-[#ffccb5] bg-[#fff0ea] p-4">
                 <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
                   Suggested message
@@ -479,19 +774,38 @@ export function OneMinuteDecision() {
                 </p>
               </div>
 
-              {/* Action buttons */}
+              {saveError ? (
+                <div className="mt-4 rounded-2xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm font-bold text-[#dc2626]">
+                  {saveError}
+                </div>
+              ) : null}
+
+              {savedApplicantId ? (
+                <div className="mt-4 rounded-2xl border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm font-bold text-emerald-800">
+                  Applicant saved.{" "}
+                  <Link
+                    className="underline underline-offset-4"
+                    href={`/dashboard/applicants/${savedApplicantId}`}
+                  >
+                    View saved applicant
+                  </Link>
+                </div>
+              ) : null}
+
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
                   className="btn-primary text-sm"
                   onClick={saveApplicant}
+                  disabled={saving || Boolean(savedApplicantId)}
                 >
-                  {savedId ? "Saved" : "Save Applicant"}
+                  {saving ? "Saving..." : savedApplicantId ? "Saved" : "Save Applicant"}
                 </button>
                 <button
                   type="button"
                   className="btn-secondary text-sm"
                   onClick={copyMessage}
+                  disabled={!result.suggestedMessage}
                 >
                   {copied ? "Copied" : "Copy Message"}
                 </button>
@@ -499,33 +813,24 @@ export function OneMinuteDecision() {
                   type="button"
                   className="btn-secondary text-sm"
                   onClick={createOwnerReport}
+                  disabled={saving}
                 >
                   Create Owner Report
                 </button>
-                <Link
-                  className="btn-secondary text-sm"
-                  href="/dashboard/compare"
-                >
+                <Link className="btn-secondary text-sm" href="/dashboard/compare">
                   Compare
                 </Link>
-                <button
-                  type="button"
-                  className="btn-ghost text-sm"
-                  onClick={clearAll}
-                >
+                <button type="button" className="btn-ghost text-sm" onClick={clearAll}>
                   Clear / Reset
                 </button>
               </div>
 
-              {/* Time saved */}
               <p className="mt-4 rounded-2xl border border-[#b8c4d4] bg-white px-4 py-3 text-sm font-black text-[#071126]">
                 Applicant packet organized. Estimated time saved: 20 minutes.
               </p>
-
-              {/* Compliance */}
               <p className="mt-4 text-xs font-bold leading-5 text-[#475569]">
-                Fair Housing Mode: On. RentNinja uses objective screening
-                criteria only. Final decisions are your responsibility.
+                Fair Housing Mode: On. RentNinja uses objective screening criteria
+                only. Final decisions are your responsibility.
               </p>
             </div>
           ) : (
@@ -549,7 +854,6 @@ export function OneMinuteDecision() {
   );
 }
 
-// ── Sub components ────────────────────────────────────────────────────────────
 function DecisionMetric({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-2xl border border-[#b8c4d4] bg-white px-4 py-3">
@@ -572,7 +876,9 @@ function Insight({
 }) {
   return (
     <div
-      className={`rounded-2xl border px-4 py-3 ${accent ? "border-[#ffccb5] bg-[#fff0ea]" : "border-[#b8c4d4] bg-white"}`}
+      className={`rounded-2xl border px-4 py-3 ${
+        accent ? "border-[#ffccb5] bg-[#fff0ea]" : "border-[#b8c4d4] bg-white"
+      }`}
     >
       <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
         {label}

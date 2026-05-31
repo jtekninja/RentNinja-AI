@@ -134,6 +134,23 @@ const applicantSchema = new Schema(
       type: Number,
       required: true,
     },
+    incomeAmount: {
+      type: Number,
+      default: null,
+    },
+    incomeFrequency: {
+      type: String,
+      enum: ["hourly", "weekly", "biweekly", "monthly", "yearly", "unknown"],
+      default: "unknown",
+    },
+    normalizedMonthlyIncome: {
+      type: Number,
+      default: null,
+    },
+    incomeToRentRatio: {
+      type: Number,
+      default: null,
+    },
     housingSupport: {
       type: String,
       enum: ["None", "Voucher", "Subsidy"],
@@ -223,6 +240,49 @@ const applicantSchema = new Schema(
     aiRecommendation: {
       type: String,
       default: "",
+    },
+    rawText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    suggestedMessage: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    extractedFieldSummary: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    missingDocuments: {
+      type: [String],
+      default: [],
+    },
+    nextStep: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    confidenceLevel: {
+      type: String,
+      enum: ["Low", "Medium", "High"],
+      default: "Medium",
+    },
+    confidenceReason: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    readiness: {
+      type: Number,
+      default: 0,
+    },
+    riskLevel: {
+      type: String,
+      enum: ["Low", "Medium", "High"],
+      default: "Medium",
     },
     notes: {
       type: [String],

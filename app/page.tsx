@@ -15,7 +15,7 @@ export default async function HomePage() {
   }
 
   return (
-    <main className="min-h-screen overflow-x-hidden bg-[#eef4ff] text-[#081026]">
+    <main className="min-h-screen overflow-x-hidden bg-[#e8eef6] text-[#071126]">
       {/* Micro-animation CSS style block */}
       <style
         dangerouslySetInnerHTML={{
@@ -64,8 +64,8 @@ export default async function HomePage() {
                   .
                 </h1>
                 <p className="mt-4 max-w-full text-base leading-7 text-[#364154] lg:max-w-[560px]">
-                  RentNinja AI turns messy applications, messages, and
-                  documents into ranked applicants, missing-document checklists,
+                  RentNinja AI turns messy applications, messages, and documents
+                  into ranked applicants, missing-document checklists,
                   owner-ready reports, and follow-up messages.
                 </p>
 
@@ -99,7 +99,6 @@ export default async function HomePage() {
                   src="/rentninja_background1.png"
                   alt="RentNinja City Background"
                   fill
-                  priority
                   sizes="(max-width: 768px) 100vw, 50vw"
                   className="pointer-events-none object-cover opacity-95 z-0"
                   style={{
@@ -180,7 +179,10 @@ export default async function HomePage() {
                     "Helps users stay organized without spreadsheets",
                     "Uses Fair Housing Guardrails for safer decision support",
                   ].map((item) => (
-                    <p key={item} className="rounded-2xl bg-[#f8fafc] px-4 py-3">
+                    <p
+                      key={item}
+                      className="rounded-2xl bg-[#f8fafc] px-4 py-3"
+                    >
                       {item}
                     </p>
                   ))}

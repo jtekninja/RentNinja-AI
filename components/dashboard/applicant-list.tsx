@@ -38,6 +38,10 @@ export type ApplicantRecord = {
   applicationSource: string;
   monthlyRent: number;
   monthlyIncome: number;
+  incomeAmount?: number | null;
+  incomeFrequency?: "hourly" | "weekly" | "biweekly" | "monthly" | "yearly" | "unknown";
+  normalizedMonthlyIncome?: number | null;
+  incomeToRentRatio?: number | null;
   housingSupport: "None" | "Voucher" | "Subsidy";
   supportProgram: string;
   monthlySubsidyAmount: number;

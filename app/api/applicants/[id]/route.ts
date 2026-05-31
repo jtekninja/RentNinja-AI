@@ -7,11 +7,27 @@ import { applicantSchema } from "@/lib/validators";
 import { calculateApplicantScore } from "@/lib/scoring";
 import { serializeApplicantRecord } from "@/lib/applicant-serialization";
 import { buildApplicantDayKey, buildApplicantFingerprint } from "@/lib/applicant-dedup";
+import { calculateIncomeToRentRatio } from "@/lib/income";
 import Applicant from "@/models/Applicant";
 import Organization from "@/models/Organization";
 
 function unauthorized() {
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
+}
+
+function validationErrorResponse(issues: Array<{ message: string; path: PropertyKey[] }>) {
+  const firstIssue = issues[0];
+  const field = firstIssue?.path?.map(String).join(".");
+  const message = field
+    ? `${field}: ${firstIssue.message}`
+    : firstIssue?.message || "Invalid applicant.";
+
+  return NextResponse.json({ message, issues }, { status: 400 });
+}
+
+function finiteNumber(value: unknown, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
 }
 
 function normalizeNotes(notes: unknown) {
@@ -141,7 +157,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const parsed = applicantSchema.safeParse(json);
 
   if (!parsed.success) {
-    return NextResponse.json({ message: parsed.error.issues[0]?.message || "Invalid applicant." }, { status: 400 });
+    return validationErrorResponse(parsed.error.issues);
   }
 
   const applicant = await findApplicant(id, session.user.organizationId);
@@ -164,12 +180,22 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     );
   }
 
+  const monthlyRent = finiteNumber(parsed.data.monthlyRent);
+  const normalizedMonthlyIncome =
+    parsed.data.normalizedMonthlyIncome !== null
+      ? finiteNumber(parsed.data.normalizedMonthlyIncome)
+      : finiteNumber(parsed.data.monthlyIncome);
+  const monthlyIncome = normalizedMonthlyIncome || finiteNumber(parsed.data.monthlyIncome);
+  const incomeToRentRatio =
+    parsed.data.incomeToRentRatio ??
+    calculateIncomeToRentRatio(monthlyIncome || null, monthlyRent || null);
+
   const duplicateFingerprint = buildApplicantFingerprint({
     email: parsed.data.email,
     phone: parsed.data.phone,
     name: parsed.data.name,
-    monthlyRent: parsed.data.monthlyRent,
-    monthlyIncome: parsed.data.monthlyIncome
+    monthlyRent,
+    monthlyIncome
   });
 
   const duplicateApplicant = await findDuplicateApplicant({
@@ -179,8 +205,8 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     email: parsed.data.email,
     phone: parsed.data.phone,
     name: parsed.data.name,
-    monthlyRent: parsed.data.monthlyRent,
-    monthlyIncome: parsed.data.monthlyIncome
+    monthlyRent,
+    monthlyIncome
   });
 
   if (duplicateApplicant) {
@@ -210,7 +236,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   const normalizedNotes = cleanMissingItems(normalizeNotes(parsed.data.notes), {
     propertyAddress: parsed.data.propertyAddress,
     propertyPostalCode: parsed.data.propertyPostalCode,
-    monthlyRent: parsed.data.monthlyRent,
+    monthlyRent,
     moveInDate: parsed.data.moveInDate
   });
   const normalizedCoApplicants = normalizeCoApplicants(parsed.data.coApplicants);
@@ -229,8 +255,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       duplicateFingerprint,
       duplicateDayKey: applicant.duplicateDayKey || buildApplicantDayKey(new Date(applicant.createdAt ?? new Date())),
       applicationSource: parsed.data.applicationSource,
-      monthlyRent: parsed.data.monthlyRent,
-      monthlyIncome: parsed.data.monthlyIncome,
+      monthlyRent,
+      monthlyIncome,
+      incomeAmount: parsed.data.incomeAmount,
+      incomeFrequency: parsed.data.incomeFrequency,
+      normalizedMonthlyIncome,
+      incomeToRentRatio,
       housingSupport: parsed.data.housingSupport,
       supportProgram: parsed.data.supportProgram,
       monthlySubsidyAmount: parsed.data.monthlySubsidyAmount,
@@ -245,6 +275,19 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       affordabilityRatio: scoring.affordabilityRatio,
       responsibleRent: scoring.responsibleRent,
       redFlags: scoring.redFlags,
+      aiSummary: parsed.data.summary,
+      aiRedFlags: parsed.data.concerns,
+      aiStrengths: parsed.data.strengths,
+      aiRecommendation: parsed.data.nextStep,
+      rawText: parsed.data.rawText,
+      suggestedMessage: parsed.data.suggestedMessage,
+      extractedFieldSummary: parsed.data.extractedFieldSummary,
+      missingDocuments: parsed.data.missingDocuments,
+      nextStep: parsed.data.nextStep,
+      confidenceLevel: parsed.data.confidenceLevel,
+      confidenceReason: parsed.data.confidenceReason,
+      readiness: parsed.data.readiness,
+      riskLevel: parsed.data.riskLevel,
       notes: normalizedNotes,
       status: parsed.data.status
     });

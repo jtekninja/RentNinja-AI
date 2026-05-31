@@ -31,9 +31,13 @@ export default function RootLayout({
   return (
     <html
       lang="en"
+      suppressHydrationWarning={true}
       className={`${spaceGrotesk.variable} ${ibmPlexSans.variable}`}
     >
-      <body className="bg-[#e8eef6] text-[#071126] antialiased">
+      <body
+        className="bg-[#e8eef6] text-[#071126] antialiased"
+        suppressHydrationWarning={true}
+      >
         {children}
       </body>
     </html>

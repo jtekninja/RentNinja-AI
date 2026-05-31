@@ -1,4 +1,5 @@
 import { calculateResponsibleRent, normalizeResidentScore } from "@/lib/scoring";
+import { calculateIncomeToRentRatio } from "@/lib/income";
 
 const sourceDetectors = [
   { value: "Apartments.com", pattern: /apartments\.com/i },
@@ -84,15 +85,30 @@ function normalizeCoApplicants(coApplicants: unknown) {
     .filter((item): item is { name: string; email: string; phone: string; monthlyIncome: number; residentScore: number; notes: string } => Boolean(item));
 }
 
+function finiteNumber(value: unknown, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function nullableFiniteNumber(value: unknown) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 export function serializeApplicantRecord(applicant: Record<string, unknown>) {
   const scores = (applicant.scores ?? {}) as Record<string, unknown>;
   const normalizedNotes = normalizeNotes(applicant.notes);
   const normalizedCoApplicants = normalizeCoApplicants(applicant.coApplicants);
   const recoveredResidentScore = inferResidentScore(applicant.residentScore, normalizedNotes);
   const housingSupport = typeof applicant.housingSupport === "string" ? applicant.housingSupport : "None";
-  const monthlyRent = Number(applicant.monthlyRent ?? 0);
-  const monthlySubsidyAmount = Number(applicant.monthlySubsidyAmount ?? 0);
-  const tenantPortionRent = Number(applicant.tenantPortionRent ?? 0);
+  const monthlyRent = finiteNumber(applicant.monthlyRent);
+  const monthlyIncome = finiteNumber(applicant.monthlyIncome);
+  const incomeAmount = nullableFiniteNumber(applicant.incomeAmount);
+  const normalizedMonthlyIncome =
+    nullableFiniteNumber(applicant.normalizedMonthlyIncome) ?? monthlyIncome;
+  const storedIncomeToRentRatio = nullableFiniteNumber(applicant.incomeToRentRatio);
+  const monthlySubsidyAmount = finiteNumber(applicant.monthlySubsidyAmount);
+  const tenantPortionRent = finiteNumber(applicant.tenantPortionRent);
   const responsibleRent = Number(applicant.responsibleRent ?? 0) || calculateResponsibleRent({
     monthlyRent,
     housingSupport: housingSupport as "None" | "Voucher" | "Subsidy",
@@ -104,6 +120,11 @@ export function serializeApplicantRecord(applicant: Record<string, unknown>) {
     Number.isFinite(storedResidentBreakdown) && storedResidentBreakdown > 0
       ? storedResidentBreakdown
       : normalizeResidentScore(recoveredResidentScore);
+  const affordabilityRatio =
+    nullableFiniteNumber(applicant.affordabilityRatio) ??
+    storedIncomeToRentRatio ??
+    calculateIncomeToRentRatio(normalizedMonthlyIncome || null, responsibleRent || monthlyRent || null) ??
+    0;
 
   return {
     ...applicant,
@@ -117,9 +138,15 @@ export function serializeApplicantRecord(applicant: Record<string, unknown>) {
     supportProgram: typeof applicant.supportProgram === "string" ? applicant.supportProgram : "",
     coApplicants: normalizedCoApplicants,
     monthlyRent,
+    monthlyIncome,
+    incomeAmount,
+    incomeFrequency: typeof applicant.incomeFrequency === "string" ? applicant.incomeFrequency : "unknown",
+    normalizedMonthlyIncome,
+    incomeToRentRatio: storedIncomeToRentRatio,
     monthlySubsidyAmount,
     tenantPortionRent,
     responsibleRent,
+    affordabilityRatio,
     subsidyStatus: typeof applicant.subsidyStatus === "string" ? applicant.subsidyStatus : "N/A",
     inspectionStatus: typeof applicant.inspectionStatus === "string" ? applicant.inspectionStatus : "N/A",
     residentScore: recoveredResidentScore,
