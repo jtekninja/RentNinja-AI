@@ -3,6 +3,7 @@ import { getApplicantIntelligence } from "@/lib/applicant-intelligence";
 import { getDashboardData } from "@/lib/data/dashboard";
 import { getNextBestAction } from "@/lib/next-best-action";
 import { requireSession } from "@/lib/require-session";
+import { formatDueAtSigningBreakdown } from "@/lib/move-in-costs";
 
 export default async function ComparePage() {
   const session = await requireSession();
@@ -58,7 +59,19 @@ export default async function ComparePage() {
         </section>
       ) : (
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {candidates.map(({ applicant, intel, nextAction }, index) => (
+          {candidates.map(({ applicant, intel, nextAction }, index) => {
+            const dueAtSigningAmount = applicant.dueAtSigningAmount || applicant.dueAtSigning || 0;
+            const dueAtSigningBreakdown = dueAtSigningAmount
+              ? formatDueAtSigningBreakdown({
+                  firstMonthRent: applicant.firstMonthRent ?? null,
+                  securityDeposit: applicant.securityDeposit ?? null,
+                  brokerFee: applicant.brokerFee ?? null,
+                  petFee: applicant.petFee ?? null,
+                  otherMoveInFees: applicant.otherMoveInFees ?? null,
+                })
+              : "Needs confirmation";
+
+            return (
             <article
               key={applicant._id}
               className="rounded-[20px] border border-[#b8c4d4] bg-white p-5 shadow-[0_10px_26px_rgba(15,23,42,0.08)]"
@@ -73,6 +86,13 @@ export default async function ComparePage() {
                   ["Readiness", `${intel.readiness}%`],
                   ["Risk", intel.riskLevel],
                   ["Missing items", `${intel.documentsMissing.length}`],
+                  [
+                    "Due at signing",
+                    dueAtSigningAmount
+                      ? `$${dueAtSigningAmount.toLocaleString()}`
+                      : "Needs confirmation",
+                  ],
+                  ["Move-in breakdown", dueAtSigningBreakdown],
                   ["Next step", nextAction.nextBestActionLabel],
                   ["Reason", nextAction.nextBestActionReason],
                 ].map(([metric, value]) => (
@@ -88,7 +108,8 @@ export default async function ComparePage() {
                 ))}
               </div>
             </article>
-          ))}
+            );
+          })}
         </section>
       )}
     </WorkspacePageShell>

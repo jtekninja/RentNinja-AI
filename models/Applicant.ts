@@ -1,4 +1,5 @@
 import { Schema, model, models, type InferSchemaType } from "mongoose";
+import { applicantStatusValues } from "@/lib/applicant-status";
 
 const coApplicantSchema = new Schema(
   {
@@ -80,6 +81,74 @@ const applicantSchema = new Schema(
       default: "",
       trim: true,
     },
+    propertyUnit: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    propertyNickname: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    borough: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    neighborhood: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    utilitiesIncluded: {
+      type: Boolean,
+      default: false,
+    },
+    bedrooms: {
+      type: Number,
+      default: null,
+    },
+    bathrooms: {
+      type: Number,
+      default: null,
+    },
+    propertyMonthlyRent: {
+      type: Number,
+      default: 0,
+    },
+    rentSource: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    incomeSource: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    dueAtSigningSource: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    securityDepositMonths: {
+      type: Number,
+      default: 1,
+    },
+    requireFirstMonthAtSigning: {
+      type: Boolean,
+      default: true,
+    },
+    financialFieldsCorrected: {
+      type: Boolean,
+      default: false,
+    },
+    financialCorrectionNote: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     propertyCity: {
       type: String,
       default: "",
@@ -133,6 +202,78 @@ const applicantSchema = new Schema(
     monthlyIncome: {
       type: Number,
       required: true,
+    },
+    dueAtSigning: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    securityDeposit: {
+      type: Number,
+      required: true,
+      default: 0,
+    },
+    firstMonthRent: {
+      type: Number,
+      default: 0,
+    },
+    brokerFee: {
+      type: Number,
+      default: 0,
+    },
+    petFee: {
+      type: Number,
+      default: 0,
+    },
+    otherMoveInFees: {
+      type: Number,
+      default: 0,
+    },
+    dueAtSigningAmount: {
+      type: Number,
+      default: 0,
+    },
+    dueAtSigningRawText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    dueAtSigningNeedsConfirmation: {
+      type: Boolean,
+      default: false,
+    },
+    applicantGrossMonthlyIncome: {
+      type: Number,
+      default: null,
+    },
+    applicantAnnualIncome: {
+      type: Number,
+      default: null,
+    },
+    applicantIncomeAmount: {
+      type: Number,
+      default: null,
+    },
+    applicantIncomeFrequency: {
+      type: String,
+      enum: ["hourly", "weekly", "biweekly", "monthly", "yearly", "unknown"],
+      default: "unknown",
+    },
+    tenantPortion: {
+      type: Number,
+      default: 0,
+    },
+    voucherPortion: {
+      type: Number,
+      default: 0,
+    },
+    securityDepositAmount: {
+      type: Number,
+      default: 0,
+    },
+    firstMonthRentAmount: {
+      type: Number,
+      default: 0,
     },
     incomeAmount: {
       type: Number,
@@ -241,7 +382,32 @@ const applicantSchema = new Schema(
       type: String,
       default: "",
     },
+    aiRecommendedStatus: {
+      type: String,
+      default: "",
+      trim: true,
+    },
     rawText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    rawPastedText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    sourceText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    extractedDocumentText: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    documentExtracts: {
       type: String,
       default: "",
       trim: true,
@@ -258,6 +424,69 @@ const applicantSchema = new Schema(
     },
     missingDocuments: {
       type: [String],
+      default: [],
+    },
+    receivedDocuments: {
+      type: [String],
+      default: [],
+    },
+    followUpQuestions: {
+      type: [String],
+      default: [],
+    },
+    importantNotes: {
+      type: [String],
+      default: [],
+    },
+    extractedFields: {
+      type: Schema.Types.Mixed,
+      default: {},
+    },
+    uploadedFiles: {
+      type: [
+        new Schema(
+          {
+            filename: { type: String, required: true, trim: true },
+            type: { type: String, default: "", trim: true },
+            size: { type: Number, default: 0 },
+            uploadedAt: { type: String, default: "", trim: true },
+            extractionStatus: { type: String, default: "not_attempted", trim: true },
+          },
+          { _id: false },
+        ),
+      ],
+      default: [],
+    },
+    updateHistory: {
+      type: [
+        new Schema(
+          {
+            updatedAt: { type: String, required: true, trim: true },
+            sourceText: { type: String, default: "", trim: true },
+            fieldsChanged: {
+              type: [
+                new Schema(
+                  {
+                    field: { type: String, required: true, trim: true },
+                    label: { type: String, required: true, trim: true },
+                    oldValue: { type: Schema.Types.Mixed, default: null },
+                    newValue: { type: Schema.Types.Mixed, default: null },
+                    confidence: {
+                      type: String,
+                      enum: ["Low", "Medium", "High"],
+                      default: "Medium",
+                    },
+                    reason: { type: String, default: "", trim: true },
+                  },
+                  { _id: false },
+                ),
+              ],
+              default: [],
+            },
+          },
+          { _id: false },
+        ),
+      ],
       default: [],
     },
     nextStep: {
@@ -290,23 +519,7 @@ const applicantSchema = new Schema(
     },
     status: {
       type: String,
-      enum: [
-        "New",
-        "Pre-screening",
-        "Missing Documents",
-        "Ready for Review",
-        "Tour Scheduled",
-        "Owner Review",
-        "Strong Candidate",
-        "Manual Review",
-        "Approved",
-        "Declined",
-        "Leased",
-        "Archived",
-        "Screening",
-        "Review",
-        "Rejected",
-      ],
+      enum: applicantStatusValues,
       default: "New",
       index: true,
     },

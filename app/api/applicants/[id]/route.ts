@@ -7,9 +7,11 @@ import { applicantSchema } from "@/lib/validators";
 import { calculateApplicantScore } from "@/lib/scoring";
 import { serializeApplicantRecord } from "@/lib/applicant-serialization";
 import { buildApplicantDayKey, buildApplicantFingerprint } from "@/lib/applicant-dedup";
-import { calculateIncomeToRentRatio } from "@/lib/income";
+import { sanitizeApplicantPayload } from "@/lib/sanitize-applicant-payload";
+import { normalizeApplicantFinancials } from "@/lib/applicant-financials";
 import Applicant from "@/models/Applicant";
 import Organization from "@/models/Organization";
+import Property from "@/models/Property";
 
 function unauthorized() {
   return NextResponse.json({ message: "Unauthorized" }, { status: 401 });
@@ -21,6 +23,11 @@ function validationErrorResponse(issues: Array<{ message: string; path: Property
   const message = field
     ? `${field}: ${firstIssue.message}`
     : firstIssue?.message || "Invalid applicant.";
+
+  console.warn("Applicant validation failed", {
+    issueCount: issues.length,
+    firstIssue: field ? { field, message: firstIssue?.message } : firstIssue?.message,
+  });
 
   return NextResponse.json({ message, issues }, { status: 400 });
 }
@@ -146,6 +153,22 @@ async function findApplicant(id: string, organizationId: string) {
   });
 }
 
+export async function GET(_request: Request, context: { params: Promise<{ id: string }> }) {
+  const session = await auth();
+  if (!session?.user) {
+    return unauthorized();
+  }
+
+  const { id } = await context.params;
+  const applicant = await findApplicant(id, session.user.organizationId);
+
+  if (!applicant) {
+    return NextResponse.json({ message: "Applicant not found." }, { status: 404 });
+  }
+
+  return NextResponse.json(serializeApplicantRecord(applicant.toObject()));
+}
+
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user) {
@@ -153,7 +176,7 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
   }
 
   const { id } = await context.params;
-  const json = await request.json();
+  const json = sanitizeApplicantPayload(await request.json());
   const parsed = applicantSchema.safeParse(json);
 
   if (!parsed.success) {
@@ -180,15 +203,28 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
     );
   }
 
-  const monthlyRent = finiteNumber(parsed.data.monthlyRent);
-  const normalizedMonthlyIncome =
-    parsed.data.normalizedMonthlyIncome !== null
-      ? finiteNumber(parsed.data.normalizedMonthlyIncome)
-      : finiteNumber(parsed.data.monthlyIncome);
-  const monthlyIncome = normalizedMonthlyIncome || finiteNumber(parsed.data.monthlyIncome);
-  const incomeToRentRatio =
-    parsed.data.incomeToRentRatio ??
-    calculateIncomeToRentRatio(monthlyIncome || null, monthlyRent || null);
+  const propertyId =
+    parsed.data.propertyId && Types.ObjectId.isValid(parsed.data.propertyId)
+      ? new Types.ObjectId(parsed.data.propertyId)
+      : null;
+  const property = propertyId
+    ? await Property.findOne({
+        _id: propertyId,
+        organizationId: new Types.ObjectId(session.user.organizationId),
+      }).lean()
+    : null;
+  const propertyFinancials = property as
+    | { monthlyRent?: unknown; securityDepositMonths?: unknown; requireFirstMonthAtSigning?: unknown }
+    | null;
+  const financials = normalizeApplicantFinancials(parsed.data, {
+    propertyMonthlyRent: propertyFinancials ? Number(propertyFinancials.monthlyRent ?? 0) || null : null,
+    securityDepositMonths: propertyFinancials ? Number(propertyFinancials.securityDepositMonths ?? 1) || 1 : parsed.data.securityDepositMonths,
+    requireFirstMonthAtSigning: propertyFinancials?.requireFirstMonthAtSigning !== false,
+  });
+  const monthlyRent = financials.monthlyRent;
+  const monthlyIncome = financials.monthlyIncome;
+  const normalizedMonthlyIncome = financials.normalizedMonthlyIncome ?? 0;
+  const incomeToRentRatio = financials.incomeToRentRatio;
 
   const duplicateFingerprint = buildApplicantFingerprint({
     email: parsed.data.email,
@@ -252,13 +288,46 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       propertyPostalCode: parsed.data.propertyPostalCode,
       moveInDate: parsed.data.moveInDate,
       coApplicants: normalizedCoApplicants,
+      propertyId,
       duplicateFingerprint,
       duplicateDayKey: applicant.duplicateDayKey || buildApplicantDayKey(new Date(applicant.createdAt ?? new Date())),
       applicationSource: parsed.data.applicationSource,
+      propertyUnit: parsed.data.propertyUnit,
+      propertyNickname: parsed.data.propertyNickname,
+      borough: parsed.data.borough,
+      neighborhood: parsed.data.neighborhood,
+      utilitiesIncluded: parsed.data.utilitiesIncluded,
+      bedrooms: parsed.data.bedrooms,
+      bathrooms: parsed.data.bathrooms,
+      propertyMonthlyRent: financials.propertyMonthlyRent,
+      rentSource: financials.rentSource,
+      incomeSource: financials.incomeSource,
+      dueAtSigningSource: financials.dueAtSigningSource,
+      securityDepositMonths: financials.securityDepositMonths,
+      requireFirstMonthAtSigning: financials.requireFirstMonthAtSigning,
+      financialFieldsCorrected: financials.financialFieldsCorrected,
+      financialCorrectionNote: financials.financialCorrectionNote,
       monthlyRent,
       monthlyIncome,
-      incomeAmount: parsed.data.incomeAmount,
-      incomeFrequency: parsed.data.incomeFrequency,
+      dueAtSigning: financials.dueAtSigningAmount,
+      securityDeposit: financials.securityDeposit,
+      firstMonthRent: financials.firstMonthRent,
+      brokerFee: parsed.data.brokerFee,
+      petFee: parsed.data.petFee,
+      otherMoveInFees: parsed.data.otherMoveInFees,
+      dueAtSigningAmount: financials.dueAtSigningAmount,
+      dueAtSigningRawText: parsed.data.dueAtSigningRawText,
+      dueAtSigningNeedsConfirmation: financials.dueAtSigningNeedsConfirmation,
+      applicantGrossMonthlyIncome: financials.applicantGrossMonthlyIncome,
+      applicantAnnualIncome: financials.applicantAnnualIncome,
+      applicantIncomeAmount: financials.applicantIncomeAmount,
+      applicantIncomeFrequency: financials.applicantIncomeFrequency,
+      tenantPortion: financials.tenantPortion,
+      voucherPortion: financials.voucherPortion,
+      securityDepositAmount: financials.securityDepositAmount,
+      firstMonthRentAmount: financials.firstMonthRentAmount,
+      incomeAmount: financials.incomeAmount,
+      incomeFrequency: financials.incomeFrequency,
       normalizedMonthlyIncome,
       incomeToRentRatio,
       housingSupport: parsed.data.housingSupport,
@@ -279,10 +348,21 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
       aiRedFlags: parsed.data.concerns,
       aiStrengths: parsed.data.strengths,
       aiRecommendation: parsed.data.nextStep,
+      aiRecommendedStatus: parsed.data.aiRecommendedStatus,
       rawText: parsed.data.rawText,
+      rawPastedText: parsed.data.rawPastedText,
+      sourceText: parsed.data.sourceText,
+      extractedDocumentText: parsed.data.extractedDocumentText,
+      documentExtracts: parsed.data.documentExtracts,
       suggestedMessage: parsed.data.suggestedMessage,
       extractedFieldSummary: parsed.data.extractedFieldSummary,
       missingDocuments: parsed.data.missingDocuments,
+      receivedDocuments: parsed.data.receivedDocuments,
+      followUpQuestions: parsed.data.followUpQuestions,
+      importantNotes: parsed.data.importantNotes,
+      extractedFields: parsed.data.extractedFields,
+      uploadedFiles: parsed.data.uploadedFiles,
+      updateHistory: parsed.data.updateHistory,
       nextStep: parsed.data.nextStep,
       confidenceLevel: parsed.data.confidenceLevel,
       confidenceReason: parsed.data.confidenceReason,

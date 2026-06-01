@@ -316,7 +316,6 @@ export async function POST(request: Request) {
           },
           status: {
             type: "string",
-            enum: ["New", "Screening", "Approved", "Review", "Rejected"],
           },
           notes: { type: "array", items: { type: "string" } },
           missingItems: { type: "array", items: { type: "string" } },
@@ -329,7 +328,7 @@ export async function POST(request: Request) {
           content: [
             {
               type: "input_text",
-              text: `Extract applicant details from this rental application, regardless of source. Read the full packet, not just one page... Workspace compliance settings: default property city="${complianceSettings.defaultPropertyCity}", default property state="${complianceSettings.defaultPropertyState}"...`,
+              text: `Extract applicant details from this rental application, regardless of source. Read the full packet, but return only concise useful screening facts. Do not copy long source passages into notes. Ignore duplicate lines, repeated file placeholders, browser/system noise, formatting junk, irrelevant job history details unless tied to income or stability, and unnecessary long explanations. Important facts include applicant name, phone/email, income amount and frequency, employment, rent or tenant portion, move-in date, occupants, pets, smoking, voucher/subsidy, credit score, bankruptcy, eviction or housing court info, background check concerns, landlord references, documents received/missing, screening status, next step, strengths, and concerns. Workspace compliance settings: default property city="${complianceSettings.defaultPropertyCity}", default property state="${complianceSettings.defaultPropertyState}"...`,
             },
           ],
         },
@@ -339,7 +338,7 @@ export async function POST(request: Request) {
             ...contentParts,
             {
               type: "input_text",
-              text: "Return applicant data for a tenant-screening dashboard...",
+              text: "Return applicant data for a tenant-screening dashboard. Keep notes short and owner-friendly; never include full pasted text or full document text in notes.",
             },
           ],
         },

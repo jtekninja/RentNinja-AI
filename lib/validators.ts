@@ -1,27 +1,12 @@
 import { z } from "zod";
+import { applicantStatusValues, normalizeApplicantStatus } from "@/lib/applicant-status";
 
 export const applicationSourceValues = ["Apartments.com", "Zillow", "TurboTenant", "RentSpree", "Avail", "Email / Manual", "Other"] as const;
 export const housingSupportValues = ["None", "Voucher", "Subsidy"] as const;
 export const verificationStatusValues = ["N/A", "Pending", "Verified"] as const;
 export const inspectionStatusValues = ["N/A", "Pending", "Passed", "Failed"] as const;
 export const customerTypeValues = ["Landlord", "Realtor", "Property Manager", "Property Owner", "Leasing Agent", "Real Estate Team", "Other"] as const;
-export const applicantStatusValues = [
-  "New",
-  "Pre-screening",
-  "Missing Documents",
-  "Ready for Review",
-  "Tour Scheduled",
-  "Owner Review",
-  "Strong Candidate",
-  "Manual Review",
-  "Approved",
-  "Declined",
-  "Leased",
-  "Archived",
-  "Screening",
-  "Review",
-  "Rejected"
-] as const;
+export { applicantStatusValues };
 
 export const registerSchema = z.object({
   name: z.string().trim().min(2, "Name must be at least 2 characters."),
@@ -125,11 +110,45 @@ export const coApplicantSchema = z.object({
   notes: z.string().trim().max(5000).default("")
 });
 
+const updateHistorySchema = z.object({
+  updatedAt: z.string().trim().max(80),
+  sourceText: optionalText(50000),
+  fieldsChanged: z
+    .array(
+      z.object({
+        field: z.string().trim().max(120),
+        label: z.string().trim().max(200),
+        oldValue: z.unknown(),
+        newValue: z.unknown(),
+        confidence: z.enum(["Low", "Medium", "High"]),
+        reason: z.string().trim().max(1000),
+      }),
+    )
+    .max(100)
+    .default([]),
+});
+
 export const applicantSchema = z.object({
   name: z.string().trim().min(2, "Applicant name is required.").max(150),
   email: z.email("Valid email is required.").max(150).transform((value) => value.toLowerCase()),
   phone: z.string().trim().min(7, "Phone is required.").max(50),
   propertyAddress: z.string().trim().max(200).default(""),
+  propertyId: optionalText(80),
+  propertyUnit: optionalText(80),
+  propertyNickname: optionalText(150),
+  borough: optionalText(120),
+  neighborhood: optionalText(120),
+  utilitiesIncluded: z.coerce.boolean().optional().default(false),
+  bedrooms: nullableFiniteNumber,
+  bathrooms: nullableFiniteNumber,
+  propertyMonthlyRent: finiteNumber(0),
+  rentSource: optionalText(120),
+  incomeSource: optionalText(120),
+  dueAtSigningSource: optionalText(200),
+  securityDepositMonths: nullableFiniteNumber,
+  requireFirstMonthAtSigning: z.coerce.boolean().optional().default(true),
+  financialFieldsCorrected: z.coerce.boolean().optional().default(false),
+  financialCorrectionNote: optionalText(500),
   propertyCity: z.string().trim().max(120).default(""),
   propertyState: z.string().trim().max(60).default(""),
   propertyPostalCode: z.string().trim().max(20).default(""),
@@ -137,6 +156,23 @@ export const applicantSchema = z.object({
   coApplicants: z.array(coApplicantSchema).max(4, "Up to 4 co-applicants are supported.").default([]),
   monthlyRent: finiteNumber(0),
   monthlyIncome: finiteNumber(0),
+  dueAtSigning: finiteNumber(0),
+  securityDeposit: finiteNumber(0),
+  firstMonthRent: finiteNumber(0),
+  brokerFee: finiteNumber(0),
+  petFee: finiteNumber(0),
+  otherMoveInFees: finiteNumber(0),
+  dueAtSigningAmount: finiteNumber(0),
+  dueAtSigningRawText: optionalText(500),
+  dueAtSigningNeedsConfirmation: z.coerce.boolean().optional().default(false),
+  applicantGrossMonthlyIncome: nullableFiniteNumber,
+  applicantAnnualIncome: nullableFiniteNumber,
+  applicantIncomeAmount: nullableFiniteNumber,
+  applicantIncomeFrequency: z.enum(incomeFrequencyValues).optional().default("unknown"),
+  tenantPortion: finiteNumber(0),
+  voucherPortion: finiteNumber(0),
+  securityDepositAmount: finiteNumber(0),
+  firstMonthRentAmount: finiteNumber(0),
   incomeAmount: nullableFiniteNumber,
   incomeFrequency: z.enum(incomeFrequencyValues).optional().default("unknown"),
   normalizedMonthlyIncome: nullableFiniteNumber,
@@ -155,20 +191,43 @@ export const applicantSchema = z.object({
   communicationScore: z.coerce.number().min(0).max(100),
   documentationScore: z.coerce.number().min(0).max(100),
   applicationSource: z.enum(applicationSourceValues).default("Email / Manual"),
-  rawText: optionalText(10000),
+  rawText: optionalText(50000),
+  rawPastedText: optionalText(50000),
+  sourceText: optionalText(50000),
+  extractedDocumentText: optionalText(50000),
+  documentExtracts: optionalText(50000),
   suggestedMessage: optionalText(5000),
   extractedFieldSummary: optionalText(5000),
+  applicantSummary: optionalText(5000),
+  aiRecommendedStatus: optionalText(500),
   summary: optionalText(5000),
+  importantNotes: optionalTextList(5000),
   concerns: optionalTextList(3000),
   strengths: optionalTextList(3000),
   missingDocuments: optionalTextList(3000),
+  receivedDocuments: optionalTextList(3000),
+  followUpQuestions: optionalTextList(3000),
+  extractedFields: z.record(z.string(), z.unknown()).optional().default({}),
+  uploadedFiles: z
+    .array(
+      z.object({
+        filename: z.string().trim().min(1).max(255),
+        type: z.string().trim().max(120).default(""),
+        size: z.coerce.number().nonnegative().default(0),
+        uploadedAt: z.string().trim().max(80).default(""),
+        extractionStatus: z.string().trim().max(80).default("not_attempted")
+      })
+    )
+    .optional()
+    .default([]),
+  updateHistory: z.array(updateHistorySchema).max(100).optional().default([]),
   nextStep: optionalText(2000),
   confidenceLevel: z.enum(["Low", "Medium", "High"]).optional().default("Medium"),
   confidenceReason: optionalText(2000),
   readiness: z.coerce.number().min(0).max(100).optional().default(0),
   riskLevel: z.enum(["Low", "Medium", "High"]).optional().default("Medium"),
   notes: z.union([z.string().trim().max(5000), z.array(z.string().trim().min(1).max(5000))]).optional().default(""),
-  status: z.enum(applicantStatusValues).default("New")
+  status: z.preprocess((value) => normalizeApplicantStatus(value), z.enum(applicantStatusValues)).default("New")
 });
 
 export type ApplicantInput = z.infer<typeof applicantSchema>;

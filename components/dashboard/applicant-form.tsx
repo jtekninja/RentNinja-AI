@@ -10,6 +10,7 @@ import {
   applicantStatusValues,
   verificationStatusValues,
 } from "@/lib/validators";
+import { normalizeApplicantStatus } from "@/lib/applicant-status";
 import { calculateResponsibleRent } from "@/lib/scoring";
 import { isUnsetNumber } from "@/lib/utils";
 import { findComplianceWarnings } from "@/lib/compliance";
@@ -434,7 +435,7 @@ export function ApplicantForm({
           data.documentationScore >= 0
             ? data.documentationScore
             : current.documentationScore,
-        status: data.status || current.status,
+        status: normalizeApplicantStatus(data.status || current.status),
         notes: [
           data.extractionSummary ? `Summary\n${data.extractionSummary}` : "",
           data.notes.length > 0

@@ -8,6 +8,7 @@ import { getNextBestAction } from "@/lib/next-best-action";
 import { dbConnect } from "@/lib/mongodb";
 import { requireSession } from "@/lib/require-session";
 import Applicant from "@/models/Applicant";
+import Property from "@/models/Property";
 import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
 
 export default async function ApplicantDetailPage({
@@ -28,8 +29,25 @@ export default async function ApplicantDetailPage({
 
   if (!applicant) notFound();
 
+  const property =
+    applicant.propertyId && Types.ObjectId.isValid(String(applicant.propertyId))
+      ? await Property.findOne({
+          _id: new Types.ObjectId(String(applicant.propertyId)),
+          organizationId: new Types.ObjectId(session.user.organizationId),
+        }).lean()
+      : null;
+
+  const propertyFinancials = property as
+    | { monthlyRent?: unknown; securityDepositMonths?: unknown; requireFirstMonthAtSigning?: unknown }
+    | null;
+
   const record = serializeApplicantRecord(
     applicant,
+    {
+      propertyMonthlyRent: propertyFinancials ? Number(propertyFinancials.monthlyRent ?? 0) || null : null,
+      securityDepositMonths: propertyFinancials ? Number(propertyFinancials.securityDepositMonths ?? 1) || 1 : 1,
+      requireFirstMonthAtSigning: propertyFinancials?.requireFirstMonthAtSigning !== false,
+    },
   ) as unknown as ApplicantRecord;
   const intel = getApplicantIntelligence(record);
   const nextAction = getNextBestAction(record, intel);

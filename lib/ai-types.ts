@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeApplicantStatus } from "@/lib/applicant-status";
 
 export const extractedCoApplicantSchema = z.object({
   name: z.string(),
@@ -59,7 +60,7 @@ export const extractedApplicantSchema = z.object({
   communicationScore: z.number(),
   documentationScore: z.number(),
   applicationSource: z.enum(["Apartments.com", "Zillow", "TurboTenant", "RentSpree", "Avail", "Email / Manual", "Other"]),
-  status: z.enum(["New", "Screening", "Approved", "Review", "Rejected"]),
+  status: z.string().transform((value) => normalizeApplicantStatus(value)),
   notes: z.array(z.string()),
   missingItems: z.array(z.string()),
   extractionSummary: z.string()

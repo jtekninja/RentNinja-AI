@@ -185,20 +185,23 @@ export function extractIncomeFromText(text: string): {
   hoursPerWeek?: number;
 } {
   const patterns: Array<{ pattern: RegExp; frequency: IncomeFrequency }> = [
-    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:year|annual|annually|yr)\b/i, frequency: "yearly" },
-    { pattern: /\b(?:income|makes?|earns?|salary)[^$\d]{0,40}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:year|annual|annually|yr)?\b/i, frequency: "yearly" },
-    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*(?:per\s*)?(?:month|monthly|\/mo|\/month)\b/i, frequency: "monthly" },
-    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*(?:per\s*)?(?:biweekly|bi-weekly|every\s*2\s*weeks)\b/i, frequency: "biweekly" },
-    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*(?:per\s*)?(?:week|weekly|\/wk|\/week)\b/i, frequency: "weekly" },
-    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*(?:\/|per\s*)?(?:hour|hr)\b/i, frequency: "hourly" },
-    { pattern: /\b(?:income|makes?|earns?|salary)[^$\d]{0,40}\$?\s*([\d,.]+(?:\.\d+)?)/i, frequency: "unknown" },
+    { pattern: /\b(?:gross\s+)?monthly\s+(?:household\s+)?income[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\b/i, frequency: "monthly" },
+    { pattern: /\b(?:gross\s+)?annual\s+(?:household\s+)?income[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\b/i, frequency: "yearly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:month|monthly|\/mo|\/month)\b/i, frequency: "monthly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:year|annual|annually|yr)\b/i, frequency: "yearly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:biweekly|bi-weekly|every\s*2\s*weeks)\b/i, frequency: "biweekly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:week|weekly|\/wk|\/week)\b/i, frequency: "weekly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:\/|per\s*)?(?:hour|hr)\b/i, frequency: "hourly" },
+    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:year|annual|annually|yr)\b[^.\n]{0,40}\b(?:income|salary|wages?|earnings?)\b/i, frequency: "yearly" },
+    { pattern: /\$?\s*([\d,.]+(?:\.\d+)?)\s*k?\s*(?:per\s*)?(?:month|monthly|\/mo|\/month)\b[^.\n]{0,40}\b(?:income|salary|wages?|earnings?|pay)\b/i, frequency: "monthly" },
+    { pattern: /\b(?:income|makes?|earns?|salary|wages?|earnings?|pay(?:stub|check|roll)?|paid|employer)[^$\d]{0,60}\$?\s*([\d,.]+(?:\.\d+)?)/i, frequency: "unknown" },
   ];
 
   for (const item of patterns) {
     const match = text.match(item.pattern);
     if (!match) continue;
 
-    const amount = parseMoneyAmount(match[0]);
+    const amount = parseMoneyAmount(match[1] ?? match[0]);
     const hoursMatch = text.match(/(\d+(?:\.\d+)?)\s*(?:hours?|h)\s*(?:per\s*)?(?:week|wk)/i);
     const hoursPerWeek = hoursMatch ? Number(hoursMatch[1]) : undefined;
 

@@ -53,8 +53,13 @@ function hasAny(text: string, needles: string[]) {
 
 function inferDocuments(applicant: ApplicantRecord) {
   const text = noteText(applicant);
+  const dueAtSigningAmount = applicant.dueAtSigningAmount || applicant.dueAtSigning || 0;
+  const proofOfFundsDoc = dueAtSigningAmount
+    ? `Proof of funds for $${dueAtSigningAmount.toLocaleString()} due at signing`
+    : "Proof of funds for move-in costs";
   const requiredDocs = [
     ...baseRequiredDocs,
+    proofOfFundsDoc,
     ...(applicant.housingSupport !== "None"
       ? ["Voucher/shopping letter", "Case worker contact"]
       : []),
@@ -68,6 +73,7 @@ function inferDocuments(applicant: ApplicantRecord) {
       return hasAny(text, ["pay stub", "paystub", "income", "employment", "w2", "tax return"]);
     }
     if (key.includes("bank")) return hasAny(text, ["bank statement", "bank statements"]);
+    if (key.includes("proof of funds")) return hasAny(text, ["proof of funds", "bank statement", "funds available"]);
     if (key.includes("landlord")) return hasAny(text, ["landlord reference", "reference"]);
     if (key.includes("id")) return hasAny(text, ["government id", "photo id", "license"]);
     if (key.includes("application")) return hasAny(text, ["completed application", "application complete", "application form"]);

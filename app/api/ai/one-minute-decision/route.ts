@@ -16,6 +16,7 @@ import {
   type IncomeFrequency,
   type NormalizedIncome,
 } from "@/lib/income";
+import { extractMoveInCosts } from "@/lib/move-in-costs";
 
 const ONE_MINUTE_LIMIT = {
   limit: 20,
@@ -60,6 +61,21 @@ export type DecisionResult = {
   demoMode: boolean;
 };
 
+type PropertyContext = {
+  propertyId?: string;
+  propertyAddress?: string;
+  propertyUnit?: string;
+  propertyNickname?: string;
+  borough?: string;
+  neighborhood?: string;
+  bedrooms?: number | null;
+  bathrooms?: number | null;
+  monthlyRent?: number | null;
+  securityDepositMonths?: number | null;
+  requireFirstMonthAtSigning?: boolean | null;
+  utilitiesIncluded?: boolean;
+};
+
 function matchFirst(text: string, patterns: RegExp[]) {
   for (const pattern of patterns) {
     const match = text.match(pattern);
@@ -80,7 +96,12 @@ function clampScore(value: unknown, fallback: number) {
   return Math.max(0, Math.min(100, numeric));
 }
 
-function mockDecision(input: string): DecisionResult {
+function getPropertyRent(propertyContext?: PropertyContext) {
+  const rent = Number(propertyContext?.monthlyRent ?? 0);
+  return Number.isFinite(rent) && rent > 0 ? rent : null;
+}
+
+function mockDecision(input: string, propertyContext?: PropertyContext): DecisionResult {
   const lower = input.toLowerCase();
   const email = matchFirst(input, [/([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/i]);
   const phone = matchFirst(input, [/(\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4})/]);
@@ -110,7 +131,12 @@ function mockDecision(input: string): DecisionResult {
 
   // ── Rent extraction ──
   const extractedRent = extractRentFromText(input);
-  const monthlyRentAmount = extractedRent.amount ?? null;
+  const propertyRent = getPropertyRent(propertyContext);
+  const monthlyRentAmount = propertyRent ?? extractedRent.amount ?? null;
+  const moveInCosts = extractMoveInCosts(input, monthlyRentAmount);
+  const proofOfFundsDoc = moveInCosts.dueAtSigningAmount
+    ? `Proof of funds for $${moveInCosts.dueAtSigningAmount.toLocaleString()} due at signing`
+    : "Proof of funds for move-in costs";
 
   // ── Affordability ──
   const affordabilityDisplay = formatAffordabilityDisplay(
@@ -143,6 +169,9 @@ function mockDecision(input: string): DecisionResult {
     hasVoucher && !lower.includes("shopping letter")
       ? "Voucher shopping letter"
       : "",
+    /proof of funds|bank statements?/i.test(lower)
+      ? ""
+      : proofOfFundsDoc,
   ].filter(Boolean);
 
   // ── Scoring ──
@@ -240,7 +269,9 @@ function mockDecision(input: string): DecisionResult {
     confidenceLevel:
       input.length > 350 ? "High" : input.length > 120 ? "Medium" : "Low",
     confidenceReason:
-      input.length > 350
+      propertyContext?.propertyAddress
+        ? `Review includes property context for ${propertyContext.propertyAddress}.`
+        : input.length > 350
         ? "The pasted info includes enough detail for a higher-confidence draft review."
         : input.length > 120
           ? "Some core details were found, but missing documents and unclear fields still need follow-up."
@@ -268,6 +299,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => ({}));
   const input = String(body?.input || "").trim();
+  const propertyContext = (body?.propertyContext || {}) as PropertyContext;
   if (!input) {
     return NextResponse.json(
       { message: "Paste applicant info first." },
@@ -276,7 +308,7 @@ export async function POST(request: Request) {
   }
 
   if (!hasOpenAIConfig()) {
-    return NextResponse.json(mockDecision(input));
+    return NextResponse.json(mockDecision(input, propertyContext));
   }
 
   // AI path: use OpenAI but normalize income deterministically after
@@ -309,7 +341,7 @@ export async function POST(request: Request) {
   }>({
     schemaName: "one_minute_applicant_decision",
     schemaDescription:
-      "Clean applicant decision card and messy-info extraction. IMPORTANT: Preserve the income frequency (yearly/monthly/weekly/hourly) in the householdIncome field as raw text.",
+      "Clean applicant decision card and messy-info extraction. IMPORTANT: Preserve the income frequency (yearly/monthly/weekly/hourly) in the householdIncome field as raw text. Return concise screening facts only, not copied source text.",
     schema: {
       type: "object",
       additionalProperties: false,
@@ -379,9 +411,17 @@ export async function POST(request: Request) {
       {
         role: "system",
         content:
-          "You are RentNinja AI. Extract messy rental applicant info. IMPORTANT: Always preserve the income frequency (yearly, monthly, weekly, hourly) in the householdIncome field. Write it as raw text like '$180,000/year' not just '$180,000'. Use objective rental criteria only: income/rent ratio, documentation completeness, rental history, references, timeline readiness, property policy fit, screening scores if provided, voucher/subsidy process clarity, and missing information. Do not analyze or recommend based on protected classes.",
+          "You are RentNinja AI. Extract messy rental applicant info into concise owner-friendly screening facts only. IMPORTANT: Always preserve income frequency (yearly, monthly, weekly, hourly) in householdIncome. Treat phrases like 'gross monthly income $7,000' as applicant income, not rent. Treat only 'rent', 'listing rent', 'unit rent', 'monthly rent for the apartment', or landlord-provided rent as rent. If selected property context includes monthlyRent, do not overwrite it with applicant income. If multiple dollar amounts exist, classify each by label/context and return confidence/source in the concise explanation. Write income as raw text like '$180,000/year' not just '$180,000'. Ignore duplicate lines, repeated uploaded-file placeholder text, browser/system noise, formatting junk, irrelevant job history details unless tied to income or stability, and unnecessary long explanations. Focus on applicant name, phone/email, income amount/frequency, employment, rent or tenant portion, move-in date, occupants, pets, smoking, voucher/subsidy, credit score, bankruptcy, eviction or housing court info, background check concerns, landlord references, documents received/missing, screening status, next step, strengths, and concerns. Use objective rental criteria only. Do not analyze or recommend based on protected classes.",
       },
-      { role: "user", content: input },
+      {
+        role: "user",
+        content: [
+          propertyContext?.propertyAddress
+            ? `Selected rental property context:\n${JSON.stringify(propertyContext, null, 2)}`
+            : "No property selected. Rent and location-specific screening may be incomplete.",
+          `Applicant source material:\n${input}`,
+        ].join("\n\n"),
+      },
     ],
   });
 
@@ -399,8 +439,9 @@ export async function POST(request: Request) {
     hoursPerWeek: extractedIncome.hoursPerWeek,
   });
   const extractedRent = extractRentFromText(input);
+  const propertyRent = getPropertyRent(propertyContext);
   const rentAmount =
-    extractedRent.amount ?? parseRentToMonthly(aiResult.monthlyRent) ?? null;
+    propertyRent ?? extractedRent.amount ?? parseRentToMonthly(aiResult.monthlyRent) ?? null;
 
   const incomeData: NormalizedIncome = {
     amount: incomeAmount,
@@ -436,6 +477,23 @@ export async function POST(request: Request) {
       aiReadiness = Math.max(25, aiReadiness - 5);
     }
   }
+  const aiMoveInCosts = extractMoveInCosts(
+    [input, aiResult.confidenceReason, aiResult.missingDocuments.join("\n")].join("\n"),
+    rentAmount,
+  );
+  const aiProofOfFundsDoc = aiMoveInCosts.dueAtSigningAmount
+    ? `Proof of funds for $${aiMoveInCosts.dueAtSigningAmount.toLocaleString()} due at signing`
+    : "Proof of funds for move-in costs";
+  const aiMissingDocuments = aiResult.missingDocuments.some((item) =>
+    /proof of funds|move[- ]?in costs?|due at signing/i.test(item),
+  )
+    ? [
+        ...aiResult.missingDocuments.filter(
+          (item) => !/proof of funds|move[- ]?in costs?|due at signing/i.test(item),
+        ),
+        aiProofOfFundsDoc,
+      ]
+    : aiResult.missingDocuments;
 
   return NextResponse.json({
     applicantName: aiResult.applicantName,
@@ -464,7 +522,7 @@ export async function POST(request: Request) {
     occupants: aiResult.occupants,
     petsSmoking: aiResult.petsSmoking,
     documentsMentioned: aiResult.documentsMentioned,
-    missingDocuments: aiResult.missingDocuments,
+    missingDocuments: aiMissingDocuments,
     redFlagsOrConcerns: aiResult.redFlagsOrConcerns,
     followUpQuestions: aiResult.followUpQuestions,
     suggestedStatus: aiResult.suggestedStatus,

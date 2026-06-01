@@ -7,6 +7,8 @@ import { WorkspacePageShell } from "@/components/dashboard/workspace-page-shell"
 import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
 import { getApplicantIntelligence } from "@/lib/applicant-intelligence";
 import { getNextBestAction } from "@/lib/next-best-action";
+import { normalizeApplicantStatus } from "@/lib/applicant-status";
+import { formatDueAtSigningBreakdown } from "@/lib/move-in-costs";
 
 type ReviewResult = {
   applicantName: string;
@@ -58,6 +60,7 @@ type OwnerReportView = {
   mainConcern: string;
   bestNextStep: string;
   suggestedStatus: string;
+  savedStatus: string;
   phone: string;
   email: string;
   moveInDate: string;
@@ -65,6 +68,8 @@ type OwnerReportView = {
   householdIncome: string;
   voucherInfo: string;
   tenantPortion: string;
+  dueAtSigning: string;
+  dueAtSigningBreakdown: string;
   missingDocuments: string[];
   concerns: string[];
   suggestedMessage: string;
@@ -95,7 +100,8 @@ function reportFromReview(review: SavedReview): OwnerReportView {
     mainStrength: review.result.mainStrength,
     mainConcern: review.result.mainConcern,
     bestNextStep: review.result.bestNextStep,
-    suggestedStatus: review.result.suggestedStatus,
+    suggestedStatus: review.result.suggestedStatus || "Not provided",
+    savedStatus: normalizeApplicantStatus(review.result.suggestedStatus),
     phone: review.result.phone || "Not provided",
     email: review.result.email || "Not provided",
     moveInDate: review.result.moveInDate || "Not provided",
@@ -103,6 +109,8 @@ function reportFromReview(review: SavedReview): OwnerReportView {
     householdIncome: review.result.householdIncome || "Not provided",
     voucherInfo: review.result.voucherInfo || "None",
     tenantPortion: review.result.tenantPortion || "Not provided",
+    dueAtSigning: "Needs confirmation",
+    dueAtSigningBreakdown: "Needs confirmation",
     missingDocuments: review.result.missingDocuments,
     concerns: review.result.redFlagsOrConcerns,
     suggestedMessage: review.result.suggestedMessage,
@@ -117,6 +125,7 @@ function reportFromApplicant(applicant: ApplicantRecord): OwnerReportView {
       .find((note) => note.toLowerCase().startsWith("suggested message"))
       ?.replace(/^suggested message/i, "")
       .trim() || nextAction.nextBestActionReason;
+  const dueAtSigningAmount = applicant.dueAtSigningAmount || applicant.dueAtSigning || 0;
 
   return {
     id: applicant._id,
@@ -130,7 +139,8 @@ function reportFromApplicant(applicant: ApplicantRecord): OwnerReportView {
     mainStrength: intel.mainStrength,
     mainConcern: intel.mainConcern,
     bestNextStep: nextAction.nextBestActionLabel,
-    suggestedStatus: applicant.status,
+    suggestedStatus: applicant.aiRecommendedStatus || "Not provided",
+    savedStatus: applicant.status,
     phone: applicant.phone || "Not provided",
     email: applicant.email || "Not provided",
     moveInDate: applicant.moveInDate || "Not provided",
@@ -147,6 +157,18 @@ function reportFromApplicant(applicant: ApplicantRecord): OwnerReportView {
     tenantPortion: applicant.tenantPortionRent
       ? `$${applicant.tenantPortionRent.toLocaleString()}`
       : "Not provided",
+    dueAtSigning: dueAtSigningAmount
+      ? `$${dueAtSigningAmount.toLocaleString()}`
+      : "Needs confirmation",
+    dueAtSigningBreakdown: dueAtSigningAmount
+      ? formatDueAtSigningBreakdown({
+          firstMonthRent: applicant.firstMonthRent ?? null,
+          securityDeposit: applicant.securityDeposit ?? null,
+          brokerFee: applicant.brokerFee ?? null,
+          petFee: applicant.petFee ?? null,
+          otherMoveInFees: applicant.otherMoveInFees ?? null,
+        })
+      : "Needs confirmation",
     missingDocuments: intel.documentsMissing,
     concerns: applicant.redFlags.length
       ? applicant.redFlags
@@ -286,7 +308,8 @@ function OwnerReportCard({ report }: { report: OwnerReportView }) {
         <FieldCard label="Main Strength" value={report.mainStrength} />
         <FieldCard label="Main Concern" value={report.mainConcern} />
         <FieldCard label="Best Next Step" value={report.bestNextStep} bold />
-        <FieldCard label="Suggested Status" value={report.suggestedStatus} bold />
+        <FieldCard label="AI Recommended Status" value={report.suggestedStatus} bold />
+        <FieldCard label="Saved Status" value={report.savedStatus} bold />
       </div>
 
       <ReportSection title="Contact">
@@ -295,11 +318,13 @@ function OwnerReportCard({ report }: { report: OwnerReportView }) {
         <FieldCard compact label="Move-in" value={report.moveInDate} />
       </ReportSection>
 
-      <ReportSection title="Financials" columns="sm:grid-cols-4">
+      <ReportSection title="Financials" columns="sm:grid-cols-3">
         <FieldCard compact label="Rent" value={report.monthlyRent} />
         <FieldCard compact label="Income" value={report.householdIncome} />
         <FieldCard compact label="Voucher" value={report.voucherInfo} />
         <FieldCard compact label="Tenant portion" value={report.tenantPortion} />
+        <FieldCard compact label="Due at signing" value={report.dueAtSigning} />
+        <FieldCard compact label="Move-in breakdown" value={report.dueAtSigningBreakdown} />
       </ReportSection>
 
       <ListSection

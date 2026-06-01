@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   calculateIncomeToRentRatio,
   detectIncomeFrequency,
@@ -15,6 +15,16 @@ import {
   type IncomeFrequency,
   type NormalizedIncome,
 } from "@/lib/income";
+import { sanitizeApplicantPayload } from "@/lib/sanitize-applicant-payload";
+import {
+  applicantStatusValues,
+  normalizeApplicantStatus,
+  type ApplicantStatus,
+} from "@/lib/applicant-status";
+import {
+  extractMoveInCosts,
+  formatDueAtSigningBreakdown,
+} from "@/lib/move-in-costs";
 
 type DecisionResult = {
   applicantName: string;
@@ -51,6 +61,7 @@ type DecisionResult = {
   bestNextStep: string;
   suggestedMessage: string;
   demoMode: boolean;
+  rentWarning?: string | null;
 };
 
 const STORAGE_KEY = "rentninja:reviewed-applicants";
@@ -63,6 +74,53 @@ type SavedReview = {
   savedAt: string;
   rawInput: string;
   result: DecisionResult;
+};
+
+type UploadedFileMetadata = {
+  filename: string;
+  type: string;
+  size: number;
+  uploadedAt: string;
+  extractionStatus: string;
+};
+
+type AddressSuggestion = {
+  id: string;
+  formatted: string;
+  address: string;
+  city: string;
+  state: string;
+  postalCode: string;
+};
+
+type SavedProperty = {
+  _id: string;
+  name: string;
+  address: string;
+  monthlyRent: number;
+  securityDepositMonths?: number;
+  requireFirstMonthAtSigning?: boolean;
+  utilitiesIncluded: boolean;
+  unitCount?: number;
+  propertyType?: string;
+};
+
+type PropertyForm = {
+  propertyId: string;
+  propertyAddress: string;
+  propertyUnit: string;
+  borough: string;
+  neighborhood: string;
+  bedrooms: string;
+  bathrooms: string;
+  monthlyRent: string;
+  securityDepositMonths: string;
+  requireFirstMonthAtSigning: boolean;
+  utilitiesIncluded: boolean;
+  propertyNickname: string;
+  propertyCity: string;
+  propertyState: string;
+  propertyPostalCode: string;
 };
 
 function loadReviews(): SavedReview[] {
@@ -96,6 +154,24 @@ function boundedNumber(value: unknown, fallback: number, min = 0, max = 100) {
 
 function truncateForField(value: unknown, maxLength: number) {
   return String(value ?? "").trim().slice(0, maxLength);
+}
+
+function formatMoveInMoney(value: number | null | undefined) {
+  return value && value > 0 ? `$${Math.round(value).toLocaleString()}` : "";
+}
+
+function normalizeProofOfFundsDocs(items: string[], dueAtSigningAmount: number | null) {
+  const proofDoc = dueAtSigningAmount
+    ? `Proof of funds for ${formatMoveInMoney(dueAtSigningAmount)} due at signing`
+    : "Proof of funds for move-in costs";
+  const hasProofRequest = items.some((item) =>
+    /proof of funds|move[- ]?in costs?|due at signing/i.test(item),
+  );
+  const cleaned = items.filter(
+    (item) => !/proof of funds|move[- ]?in costs?|due at signing/i.test(item),
+  );
+
+  return hasProofRequest ? [...cleaned, proofDoc] : items;
 }
 
 function normalizeDecisionResult(data: Partial<DecisionResult>): DecisionResult {
@@ -169,6 +245,27 @@ function normalizeDecisionResult(data: Partial<DecisionResult>): DecisionResult 
     bestNextStep: data.bestNextStep || "Review missing items.",
     suggestedMessage: data.suggestedMessage || "",
     demoMode: Boolean(data.demoMode),
+    rentWarning: data.rentWarning ?? null,
+  };
+}
+
+function emptyPropertyForm(): PropertyForm {
+  return {
+    propertyId: "",
+    propertyAddress: "",
+    propertyUnit: "",
+    borough: "",
+    neighborhood: "",
+    bedrooms: "",
+    bathrooms: "",
+    monthlyRent: "",
+    securityDepositMonths: "1",
+    requireFirstMonthAtSigning: true,
+    utilitiesIncluded: false,
+    propertyNickname: "",
+    propertyCity: "",
+    propertyState: "",
+    propertyPostalCode: "",
   };
 }
 
@@ -187,11 +284,73 @@ export function OneMinuteDecision() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [fileStatus, setFileStatus] = useState("");
   const [lastReviewInput, setLastReviewInput] = useState("");
+  const [lastDocumentExtractText, setLastDocumentExtractText] = useState("");
+  const [selectedSaveStatus, setSelectedSaveStatus] = useState<ApplicantStatus>("New");
+  const [savedProperties, setSavedProperties] = useState<SavedProperty[]>([]);
+  const [propertyForm, setPropertyForm] = useState<PropertyForm>(() => emptyPropertyForm());
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressPending, setAddressPending] = useState(false);
+  const [addressLookupAvailable, setAddressLookupAvailable] = useState(true);
 
   function resetSavedState() {
     setSavedId(null);
     setSavedApplicantId(null);
   }
+
+  useEffect(() => {
+    let active = true;
+    fetch("/api/properties", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((data) => {
+        if (active && Array.isArray(data)) {
+          setSavedProperties(data);
+        }
+      })
+      .catch(() => {
+        if (active) setSavedProperties([]);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const query = propertyForm.propertyAddress.trim();
+    if (query.length < 4) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(async () => {
+      setAddressPending(true);
+      try {
+        const response = await fetch(
+          `/api/address/search?${new URLSearchParams({ q: query }).toString()}`,
+          { signal: controller.signal },
+        );
+        const data = await response.json().catch(() => ({}));
+        const suggestions = Array.isArray(data.suggestions)
+          ? data.suggestions
+          : [];
+        setAddressSuggestions(suggestions);
+        setAddressLookupAvailable(suggestions.length > 0 || response.ok);
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setAddressSuggestions([]);
+          setAddressLookupAvailable(false);
+        }
+      } finally {
+        setAddressPending(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeout);
+    };
+  }, [propertyForm.propertyAddress]);
 
   function extractionToReviewText(data: Record<string, unknown>) {
     const lines = [
@@ -224,6 +383,7 @@ export function OneMinuteDecision() {
 
   async function extractFilesForReview(sourceText: string) {
     if (selectedFiles.length === 0) {
+      setLastDocumentExtractText("");
       return "";
     }
 
@@ -240,10 +400,8 @@ export function OneMinuteDecision() {
     );
 
     if (unsupportedFiles.length > 0) {
-      throw new Error(
-        `RentNinja can read PDF, PNG, JPG, WEBP, and TXT files right now. Convert ${unsupportedFiles
-          .map((file) => file.name)
-          .join(", ")} to PDF or paste the text.`,
+      setFileStatus(
+        `File attached, but text could not be extracted. RentNinja can read PDF, PNG, JPG, WEBP, and TXT files right now.`,
       );
     }
 
@@ -255,8 +413,14 @@ export function OneMinuteDecision() {
     );
 
     if (remoteFiles.length === 0) {
-      setFileStatus(`Read ${textFiles.length} text file${textFiles.length === 1 ? "" : "s"}.`);
-      return textFileParts.filter(Boolean).join("\n\n");
+      const textOnlyExtract = textFileParts.filter(Boolean).join("\n\n");
+      setFileStatus(
+        textOnlyExtract
+          ? `Read ${textFiles.length} text file${textFiles.length === 1 ? "" : "s"}.`
+          : "File attached, but text could not be extracted.",
+      );
+      setLastDocumentExtractText(textOnlyExtract);
+      return textOnlyExtract;
     }
 
     const formData = new FormData();
@@ -284,17 +448,125 @@ export function OneMinuteDecision() {
           size: file.size,
         })),
       });
-      throw new Error(data.message || "Unable to read uploaded files.");
+      const readableText = textFileParts.filter(Boolean).join("\n\n");
+      setLastDocumentExtractText(readableText);
+      setFileStatus("File attached, but text could not be extracted.");
+      return readableText;
     }
 
     const extractedText = extractionToReviewText(data);
     const combinedText = [...textFileParts, extractedText].filter(Boolean).join("\n\n");
+    setLastDocumentExtractText(combinedText);
     setFileStatus(
       combinedText
         ? `Read ${selectedFiles.length} uploaded file${selectedFiles.length === 1 ? "" : "s"}.`
         : "Files were uploaded, but no readable applicant details were found.",
     );
     return combinedText;
+  }
+
+  function updatePropertyForm<K extends keyof PropertyForm>(
+    key: K,
+    value: PropertyForm[K],
+  ) {
+    setPropertyForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "propertyAddress" ? { propertyId: "" } : {}),
+    }));
+    resetSavedState();
+  }
+
+  function applyAddressSuggestion(suggestion: AddressSuggestion) {
+    setPropertyForm((current) => ({
+      ...current,
+      propertyId: "",
+      propertyAddress: suggestion.formatted || suggestion.address,
+      propertyCity: suggestion.city || current.propertyCity,
+      propertyState: suggestion.state || current.propertyState,
+      propertyPostalCode: suggestion.postalCode || current.propertyPostalCode,
+    }));
+    setAddressSuggestions([]);
+    resetSavedState();
+  }
+
+  function chooseSavedProperty(propertyId: string) {
+    const property = savedProperties.find((item) => item._id === propertyId);
+    if (!property) {
+      setPropertyForm((current) => ({ ...current, propertyId }));
+      return;
+    }
+
+    setPropertyForm((current) => ({
+      ...current,
+      propertyId: property._id,
+      propertyAddress: property.address,
+      monthlyRent: property.monthlyRent ? String(property.monthlyRent) : "",
+      securityDepositMonths: String(property.securityDepositMonths ?? 1),
+      requireFirstMonthAtSigning: property.requireFirstMonthAtSigning !== false,
+      utilitiesIncluded: property.utilitiesIncluded,
+      propertyNickname: property.name,
+    }));
+    setAddressSuggestions([]);
+    resetSavedState();
+  }
+
+  function buildPropertyContext() {
+    const propertyRent = finiteNumber(propertyForm.monthlyRent);
+    return {
+      propertyId: propertyForm.propertyId,
+      propertyAddress: propertyForm.propertyAddress.trim(),
+      propertyUnit: propertyForm.propertyUnit.trim(),
+      borough: propertyForm.borough.trim(),
+      neighborhood: propertyForm.neighborhood.trim(),
+      bedrooms: finiteNumber(propertyForm.bedrooms),
+      bathrooms: finiteNumber(propertyForm.bathrooms),
+      monthlyRent: propertyRent && propertyRent > 0 ? propertyRent : null,
+      securityDepositMonths: finiteNumber(propertyForm.securityDepositMonths) ?? 1,
+      requireFirstMonthAtSigning: propertyForm.requireFirstMonthAtSigning,
+      utilitiesIncluded: propertyForm.utilitiesIncluded,
+      propertyNickname: propertyForm.propertyNickname.trim(),
+      propertyCity: propertyForm.propertyCity,
+      propertyState: propertyForm.propertyState,
+      propertyPostalCode: propertyForm.propertyPostalCode,
+    };
+  }
+
+  function propertyContextToReviewText() {
+    const context = buildPropertyContext();
+    if (!context.propertyAddress && !context.monthlyRent) {
+      return "No property selected — rent and location-specific screening may be incomplete.";
+    }
+
+    return [
+      "Selected rental property context:",
+      context.propertyNickname ? `Nickname: ${context.propertyNickname}` : "",
+      context.propertyAddress ? `Property address: ${context.propertyAddress}` : "",
+      context.propertyUnit ? `Unit: ${context.propertyUnit}` : "",
+      context.borough ? `Borough / neighborhood: ${context.borough}` : "",
+      context.neighborhood ? `Neighborhood: ${context.neighborhood}` : "",
+      context.bedrooms ? `Bedrooms: ${context.bedrooms}` : "",
+      context.bathrooms ? `Bathrooms: ${context.bathrooms}` : "",
+      context.monthlyRent
+        ? `Monthly asking rent: $${context.monthlyRent.toLocaleString()}/month`
+        : "",
+      `Security deposit months: ${context.securityDepositMonths ?? 1}`,
+      `First month due at signing: ${context.requireFirstMonthAtSigning !== false ? "yes" : "no"}`,
+      context.utilitiesIncluded ? "Utilities included: yes" : "Utilities included: no",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function buildUploadedFileMetadata(extractionStatus: string): UploadedFileMetadata[] {
+    const uploadedAt = new Date().toISOString();
+    return selectedFiles.map((file) => ({
+      filename: file.name,
+      type: file.type || "unknown",
+      size: file.size,
+      uploadedAt,
+      extractionStatus,
+    }));
   }
 
   async function runDecision() {
@@ -306,6 +578,7 @@ export function OneMinuteDecision() {
     try {
       const extractedFileText = await extractFilesForReview(input);
       const reviewInput = [
+        propertyContextToReviewText(),
         input.trim() ? `Pasted applicant info:\n${input.trim()}` : "",
         extractedFileText,
       ]
@@ -313,7 +586,11 @@ export function OneMinuteDecision() {
         .join("\n\n");
 
       if (!reviewInput.trim()) {
-        setError("Paste applicant info or upload at least one file first.");
+        setError(
+          selectedFiles.length > 0
+            ? "File attached, but text could not be extracted. Paste the key applicant details and run the review again."
+            : "Paste applicant info or upload at least one file first.",
+        );
         return;
       }
 
@@ -321,7 +598,10 @@ export function OneMinuteDecision() {
       const response = await fetch("/api/ai/one-minute-decision", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: reviewInput }),
+        body: JSON.stringify({
+          input: reviewInput,
+          propertyContext: buildPropertyContext(),
+        }),
       });
       const data = await response.json();
 
@@ -330,9 +610,38 @@ export function OneMinuteDecision() {
         return;
       }
 
-      setResult(normalizeDecisionResult(data));
+      const normalizedResult = normalizeDecisionResult(data);
+      const propertyRent = buildPropertyContext().monthlyRent;
+      const pastedRent = parseRentToMonthly(input);
+      const rentWarning =
+        propertyRent && pastedRent && Math.abs(propertyRent - pastedRent) >= 1
+          ? "Pasted rent differs from saved property rent."
+          : null;
+      const finalRent =
+        propertyRent ??
+        (normalizedResult.monthlyRentAmount > 0
+          ? normalizedResult.monthlyRentAmount
+          : 0);
+      const finalResult =
+        finalRent > 0 && finalRent !== normalizedResult.monthlyRentAmount
+          ? {
+              ...normalizedResult,
+              monthlyRentAmount: finalRent,
+              monthlyRent: formatRentDisplay(finalRent),
+              affordabilityDisplay: formatAffordabilityDisplay(
+                normalizedResult.normalizedMonthlyIncome,
+                finalRent,
+              ),
+              rentWarning,
+            }
+          : { ...normalizedResult, rentWarning };
+      setResult(finalResult);
+      setSelectedSaveStatus(normalizeApplicantStatus(finalResult.suggestedStatus));
     } catch (err) {
       console.error("1-Minute Review failed", err);
+      if (selectedFiles.length > 0) {
+        setFileStatus("File attached, but text could not be extracted.");
+      }
       setError("Unable to run applicant decision.");
     } finally {
       setPending(false);
@@ -422,29 +731,110 @@ export function OneMinuteDecision() {
     const applicantName =
       truncateForField(currentResult.applicantName, 150) ||
       `Unnamed Applicant - ${timestamp}`;
-    const notes = [
+    const importantNotes = [
       currentResult.bestNextStep ? `Next step: ${currentResult.bestNextStep}` : "",
+      currentResult.suggestedStatus
+        ? `AI recommended status: ${currentResult.suggestedStatus}`
+        : "",
+      selectedSaveStatus ? `Saved status: ${selectedSaveStatus}` : "",
       currentResult.mainConcern ? `Main concern: ${currentResult.mainConcern}` : "",
-      lastReviewInput ? `Raw reviewed text:\n${lastReviewInput}` : "",
+      currentResult.mainStrength ? `Strength: ${currentResult.mainStrength}` : "",
+      currentResult.missingDocuments.length
+        ? `Missing documents: ${currentResult.missingDocuments.join(", ")}`
+        : "",
     ].filter(Boolean);
+    const sourceMaterial = lastReviewInput || input;
+    const uploadedFiles = buildUploadedFileMetadata(
+      selectedFiles.length === 0
+        ? "not_attached"
+        : lastDocumentExtractText
+          ? "extracted"
+          : "File attached, but text could not be extracted.",
+    );
+    const propertyContext = buildPropertyContext();
+    const propertyAddressNote = propertyContext.propertyAddress
+      ? `Property: ${propertyContext.propertyAddress}${propertyContext.propertyUnit ? `, ${propertyContext.propertyUnit}` : ""}`
+      : "No property selected — rent and location-specific screening may be incomplete.";
 
-    return {
+    const moveInCosts = extractMoveInCosts(
+      [
+        sourceMaterial,
+        lastDocumentExtractText,
+        currentResult.confidenceReason,
+        currentResult.missingDocuments.join("\n"),
+      ].join("\n"),
+      monthlyRent || propertyContext.monthlyRent || null,
+    );
+    const securityDepositMonths = propertyContext.securityDepositMonths ?? 1;
+    const firstMonthRent =
+      moveInCosts.firstMonthRent ??
+      (propertyContext.requireFirstMonthAtSigning !== false && monthlyRent ? monthlyRent : null);
+    const securityDeposit =
+      moveInCosts.securityDeposit ??
+      (monthlyRent && securityDepositMonths ? monthlyRent * securityDepositMonths : null);
+    const dueAtSigningAmount =
+      moveInCosts.dueAtSigningAmount ??
+      (monthlyRent && (firstMonthRent || securityDeposit)
+        ? (firstMonthRent ?? 0) + (securityDeposit ?? 0)
+        : null);
+    const normalizedMissingDocuments = normalizeProofOfFundsDocs(
+      currentResult.missingDocuments,
+      dueAtSigningAmount,
+    );
+    const dueAtSigningBreakdown = formatDueAtSigningBreakdown({
+      ...moveInCosts,
+      firstMonthRent,
+      securityDeposit,
+    });
+
+    return sanitizeApplicantPayload({
       name: applicantName,
       email:
         currentResult.email && currentResult.email.includes("@")
           ? truncateForField(currentResult.email, 150)
           : `unknown-${Date.now()}@rentninja.local`,
       phone: truncateForField(currentResult.phone || "000-000-0000", 50),
-      propertyAddress: "",
-      propertyCity: "",
-      propertyState: "",
-      propertyPostalCode: "",
+      propertyId: propertyContext.propertyId,
+      propertyAddress: propertyContext.propertyAddress,
+      propertyUnit: propertyContext.propertyUnit,
+      propertyNickname: propertyContext.propertyNickname,
+      borough: propertyContext.borough,
+      neighborhood: propertyContext.neighborhood,
+      bedrooms: propertyContext.bedrooms,
+      bathrooms: propertyContext.bathrooms,
+      utilitiesIncluded: propertyContext.utilitiesIncluded,
+      propertyCity: propertyContext.propertyCity,
+      propertyState: propertyContext.propertyState,
+      propertyPostalCode: propertyContext.propertyPostalCode,
       moveInDate: truncateForField(currentResult.moveInDate, 150),
       coApplicants: [],
       monthlyRent,
+      propertyMonthlyRent: propertyContext.monthlyRent ?? monthlyRent,
+      rentSource: propertyContext.monthlyRent ? "Property rent" : monthlyRent ? "Applicant message/document" : "Needs confirmation",
+      incomeSource: normalizedMonthlyIncome ? "Applicant message/document" : "Needs confirmation",
+      dueAtSigningSource: moveInCosts.dueAtSigningAmount ? "Applicant message/document" : dueAtSigningAmount ? "Calculated from rent + security" : "Needs confirmation",
+      securityDepositMonths,
+      requireFirstMonthAtSigning: propertyContext.requireFirstMonthAtSigning !== false,
+      financialFieldsCorrected: false,
+      financialCorrectionNote: "",
       monthlyIncome: normalizedMonthlyIncome ?? 0,
+      dueAtSigning: dueAtSigningAmount ?? 0,
+      dueAtSigningAmount: dueAtSigningAmount ?? 0,
+      dueAtSigningRawText: moveInCosts.dueAtSigningRawText,
+      dueAtSigningNeedsConfirmation: !dueAtSigningAmount,
+      firstMonthRent: firstMonthRent ?? 0,
+      securityDeposit: securityDeposit ?? 0,
+      firstMonthRentAmount: firstMonthRent ?? 0,
+      securityDepositAmount: securityDeposit ?? 0,
+      brokerFee: moveInCosts.brokerFee ?? 0,
+      petFee: moveInCosts.petFee ?? 0,
+      otherMoveInFees: moveInCosts.otherMoveInFees ?? 0,
       incomeAmount: incomeAmount || null,
       incomeFrequency,
+      applicantGrossMonthlyIncome: normalizedMonthlyIncome,
+      applicantAnnualIncome: incomeFrequency === "yearly" ? incomeAmount : null,
+      applicantIncomeAmount: incomeAmount || null,
+      applicantIncomeFrequency: incomeFrequency,
       normalizedMonthlyIncome,
       incomeToRentRatio,
       housingSupport:
@@ -454,6 +844,8 @@ export function OneMinuteDecision() {
       supportProgram: truncateForField(currentResult.voucherInfo, 150),
       monthlySubsidyAmount: 0,
       tenantPortionRent: parseMoneyAmount(currentResult.tenantPortion) ?? 0,
+      tenantPortion: parseMoneyAmount(currentResult.tenantPortion) ?? 0,
+      voucherPortion: 0,
       subsidyStatus: "N/A",
       inspectionStatus: "N/A",
       creditScore: 0,
@@ -464,28 +856,61 @@ export function OneMinuteDecision() {
       communicationScore: 70,
       documentationScore: boundedNumber(currentResult.readiness, 0),
       applicationSource: "Email / Manual",
-      rawText: lastReviewInput || input,
+      rawText: sourceMaterial,
+      rawPastedText: input,
+      sourceText: input,
+      extractedDocumentText: lastDocumentExtractText,
+      documentExtracts: lastDocumentExtractText,
+      uploadedFiles,
       suggestedMessage: currentResult.suggestedMessage,
       extractedFieldSummary: [
         `Income: ${currentResult.householdIncomeDisplay}`,
         `Rent: ${formatRentDisplay(monthlyRent || null)}`,
+        propertyAddressNote,
+        propertyContext.utilitiesIncluded ? "Utilities included: yes" : "Utilities included: no",
+        `Due at signing: ${formatMoveInMoney(dueAtSigningAmount) || "Needs confirmation"}`,
+        `Move-in breakdown: ${dueAtSigningBreakdown}`,
         `Ratio: ${formatAffordabilityDisplay(normalizedMonthlyIncome, monthlyRent || null)}`,
-        `Status: ${currentResult.suggestedStatus}`,
+        `AI recommendation: ${currentResult.suggestedStatus || "Not provided"}`,
+        `Saved status: ${selectedSaveStatus}`,
       ].join("\n"),
+      applicantSummary: currentResult.confidenceReason,
+      aiRecommendedStatus: currentResult.suggestedStatus,
       summary: currentResult.confidenceReason,
       concerns: currentResult.redFlagsOrConcerns.length
         ? currentResult.redFlagsOrConcerns
         : [currentResult.mainConcern].filter(Boolean),
       strengths: [currentResult.mainStrength].filter(Boolean),
-      missingDocuments: currentResult.missingDocuments,
+      missingDocuments: normalizedMissingDocuments,
+      receivedDocuments: currentResult.documentsMentioned,
+      followUpQuestions: currentResult.followUpQuestions,
+      extractedFields: {
+        applicantName: currentResult.applicantName,
+        phone: currentResult.phone,
+        email: currentResult.email,
+        income: currentResult.householdIncomeDisplay,
+        employment: currentResult.employmentInfo,
+        rent: formatRentDisplay(monthlyRent || null),
+        dueAtSigning: dueAtSigningAmount,
+        dueAtSigningBreakdown,
+        property: propertyContext,
+        moveInDate: currentResult.moveInDate,
+        occupants: currentResult.occupants,
+        petsSmoking: currentResult.petsSmoking,
+        voucher: currentResult.voucherInfo,
+        tenantPortion: currentResult.tenantPortion,
+        aiRecommendedStatus: currentResult.suggestedStatus,
+        savedStatus: selectedSaveStatus,
+      },
       nextStep: currentResult.bestNextStep,
       confidenceLevel: currentResult.confidenceLevel,
       confidenceReason: currentResult.confidenceReason,
       readiness: boundedNumber(currentResult.readiness, 0),
       riskLevel: currentResult.riskLevel,
-      notes,
-      status: currentResult.suggestedStatus || "New",
-    };
+      notes: importantNotes,
+      importantNotes,
+      status: selectedSaveStatus,
+    });
   }
 
   async function saveApplicant() {
@@ -513,7 +938,14 @@ export function OneMinuteDecision() {
         console.error("Unable to save applicant", {
           status: response.status,
           response: data,
-          payload,
+          payloadSummary: {
+            noteCount: Array.isArray(payload.notes) ? payload.notes.length : 0,
+            noteLengths: Array.isArray(payload.notes)
+              ? payload.notes.map((note) => String(note).length)
+              : [],
+            rawTextLength: String(payload.rawText ?? "").length,
+            uploadedFiles: payload.uploadedFiles,
+          },
         });
         throw new Error(data.message || "Unable to save applicant. Please try again.");
       }
@@ -574,6 +1006,10 @@ export function OneMinuteDecision() {
     setSelectedFiles([]);
     setFileStatus("");
     setLastReviewInput("");
+    setLastDocumentExtractText("");
+    setSelectedSaveStatus("New");
+    setPropertyForm(emptyPropertyForm());
+    setAddressSuggestions([]);
     if (fileInputRef.current) fileInputRef.current.value = "";
   }
 
@@ -636,6 +1072,133 @@ export function OneMinuteDecision() {
             RentNinja organizes the details, scores readiness, and drafts the
             follow-up.
           </p>
+
+          <div className="mt-4 rounded-[20px] border border-[#b8c4d4] bg-[#f8fafc] p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <h3 className="text-base font-black text-[#071126]">
+                  Rental Property
+                </h3>
+                <p className="mt-1 text-xs font-semibold text-[#475569]">
+                  No property selected — rent and location-specific screening may be incomplete.
+                </p>
+              </div>
+              {savedProperties.length > 0 ? (
+                <label className="grid gap-1 text-xs font-bold text-[#475569] sm:min-w-56">
+                  <span>Choose saved property</span>
+                  <select
+                    className="dashboard-input text-sm"
+                    value={propertyForm.propertyId}
+                    onChange={(event) => chooseSavedProperty(event.target.value)}
+                  >
+                    <option value="">Manual property</option>
+                    {savedProperties.map((property) => (
+                      <option key={property._id} value={property._id}>
+                        {property.name || property.address}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              ) : null}
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <label className="relative grid gap-1 text-xs font-bold text-[#475569] sm:col-span-2">
+                <span>Property address</span>
+                <input
+                  className="dashboard-input text-sm"
+                  value={propertyForm.propertyAddress}
+                  onChange={(event) =>
+                    updatePropertyForm("propertyAddress", event.target.value)
+                  }
+                  placeholder="Start typing property address..."
+                  autoComplete="off"
+                />
+                {addressPending ? (
+                  <span className="absolute right-3 top-8 text-[10px] uppercase tracking-wider text-[#64748b]">
+                    Finding
+                  </span>
+                ) : null}
+                {addressSuggestions.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-full z-30 mt-2 overflow-hidden rounded-[18px] border border-[#94a3b8] bg-white shadow-[0_18px_50px_rgba(15,23,42,0.18)]">
+                    {addressSuggestions.map((suggestion) => (
+                      <button
+                        key={suggestion.id}
+                        type="button"
+                        className="block w-full border-b border-[#b8c4d4] px-4 py-3 text-left transition hover:bg-[#fff0ea] last:border-b-0"
+                        onClick={() => applyAddressSuggestion(suggestion)}
+                      >
+                        <span className="block text-sm font-semibold text-[#071126]">
+                          {suggestion.formatted}
+                        </span>
+                        <span className="mt-1 block text-xs font-medium text-[#334155]">
+                          {[suggestion.city, suggestion.state, suggestion.postalCode]
+                            .filter(Boolean)
+                            .join(", ")}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                {!addressLookupAvailable ? (
+                  <span className="text-xs font-semibold text-[#64748b]">
+                    Address autocomplete is unavailable. Manual entry will still save.
+                  </span>
+                ) : null}
+              </label>
+
+              <PropertyInput
+                label="Unit / apartment"
+                value={propertyForm.propertyUnit}
+                onChange={(value) => updatePropertyForm("propertyUnit", value)}
+                placeholder="Apt 2B"
+              />
+              <PropertyInput
+                label="Borough / neighborhood"
+                value={propertyForm.borough}
+                onChange={(value) => updatePropertyForm("borough", value)}
+                placeholder="Brooklyn, Astoria, Downtown"
+              />
+              <PropertyInput
+                label="Bedroom count"
+                type="number"
+                value={propertyForm.bedrooms}
+                onChange={(value) => updatePropertyForm("bedrooms", value)}
+                placeholder="2"
+              />
+              <PropertyInput
+                label="Bathroom count"
+                type="number"
+                value={propertyForm.bathrooms}
+                onChange={(value) => updatePropertyForm("bathrooms", value)}
+                placeholder="1"
+              />
+              <PropertyInput
+                label="Monthly asking rent"
+                type="number"
+                value={propertyForm.monthlyRent}
+                onChange={(value) => updatePropertyForm("monthlyRent", value)}
+                placeholder="2300"
+              />
+              <PropertyInput
+                label="Property/listing nickname"
+                value={propertyForm.propertyNickname}
+                onChange={(value) => updatePropertyForm("propertyNickname", value)}
+                placeholder="Ryder St 2BR"
+              />
+              <label className="flex min-h-12 items-center gap-3 rounded-[14px] border border-[#cbd5e1] bg-white px-3 text-sm font-bold text-[#071126]">
+                <input
+                  type="checkbox"
+                  checked={propertyForm.utilitiesIncluded}
+                  onChange={(event) =>
+                    updatePropertyForm("utilitiesIncluded", event.target.checked)
+                  }
+                />
+                Utilities included
+              </label>
+            </div>
+          </div>
+
           <textarea
             className="mt-4 min-h-56 w-full rounded-[18px] border border-[#94a3b8] bg-white px-4 py-3 text-base font-semibold leading-7 text-[#071126] outline-none placeholder:text-[#475569] focus:border-[#ff4b1f] focus:shadow-[0_0_0_3px_rgba(255,75,31,0.22)]"
             value={input}
@@ -794,6 +1357,11 @@ export function OneMinuteDecision() {
                     {result.incomeWarning}
                   </p>
                 ) : null}
+                {result.rentWarning ? (
+                  <p className="mt-2 text-xs font-bold text-amber-700">
+                    {result.rentWarning}
+                  </p>
+                ) : null}
               </div>
 
               <details className="mt-3 rounded-2xl border border-[#b8c4d4] bg-white p-4">
@@ -912,7 +1480,8 @@ export function OneMinuteDecision() {
                     ["Voucher/subsidy", result.voucherInfo],
                     ["Tenant portion", result.tenantPortion],
                     ["Occupants", result.occupants],
-                    ["Status", result.suggestedStatus],
+                    ["AI recommendation", result.suggestedStatus || "Not provided"],
+                    ["Saved status", selectedSaveStatus],
                   ].map(([label, value]) => (
                     <div key={label} className="rounded-xl bg-[#f8fafc] px-3 py-2">
                       <span className="font-black text-[#071126]">{label}: </span>
@@ -948,6 +1517,29 @@ export function OneMinuteDecision() {
                   </Link>
                 </div>
               ) : null}
+
+              <label className="mt-4 grid gap-2 rounded-2xl border border-[#b8c4d4] bg-white p-4 text-sm font-bold text-[#071126]">
+                <span>Saved database status</span>
+                <select
+                  className="dashboard-input text-sm"
+                  value={selectedSaveStatus}
+                  onChange={(event) =>
+                    setSelectedSaveStatus(
+                      normalizeApplicantStatus(event.target.value),
+                    )
+                  }
+                  disabled={saving || Boolean(savedApplicantId)}
+                >
+                  {applicantStatusValues.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs font-semibold text-[#475569]">
+                  AI recommendation: {result.suggestedStatus || "Not provided"}
+                </span>
+              </label>
 
               <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <button
@@ -1019,6 +1611,34 @@ function DecisionMetric({ label, value }: { label: string; value: string }) {
       </p>
       <p className="mt-1 text-xl font-black text-[#071126]">{value}</p>
     </div>
+  );
+}
+
+function PropertyInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  type?: "text" | "number";
+}) {
+  return (
+    <label className="grid gap-1 text-xs font-bold text-[#475569]">
+      <span>{label}</span>
+      <input
+        type={type}
+        className="dashboard-input text-sm"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        min={type === "number" ? "0" : undefined}
+      />
+    </label>
   );
 }
 

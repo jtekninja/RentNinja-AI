@@ -88,6 +88,6 @@ export function getNextBestAction(
     nextBestActionReason: "RentNinja needs clearer applicant details before a confident review.",
     nextBestActionButton: "Generate message",
     recommendedMessageType: "Ask applicant screening questions",
-    suggestedStatus: "Pre-screening",
+    suggestedStatus: "Pre-Screening",
   };
 }

@@ -6,7 +6,25 @@ import { useRef, useState } from "react";
 import type { ApplicantRecord } from "@/components/dashboard/applicant-list";
 import type { ApplicantIntelligence } from "@/lib/applicant-intelligence";
 import type { NextBestAction } from "@/lib/next-best-action";
-import { calculateIncomeToRentRatio, formatRentDisplay } from "@/lib/income";
+import {
+  calculateIncomeToRentRatio,
+  formatRentDisplay,
+  normalizeIncomeToMonthly,
+  type IncomeFrequency,
+} from "@/lib/income";
+import {
+  applicantStatusValues,
+  normalizeApplicantStatus,
+} from "@/lib/applicant-status";
+import {
+  getSavedMonthlyIncome,
+  loadExistingApplicant,
+  mergeApplicantUpdate,
+  saveApplicantUpdate,
+  type ApplicantMergeReviewRow,
+} from "@/lib/applicant-update-merge";
+import type { UpdateCategory } from "@/lib/applicant-update-classifier";
+import { formatDueAtSigningBreakdown } from "@/lib/move-in-costs";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function readinessLabel(p: number) {
@@ -31,6 +49,17 @@ function finiteNumber(value: unknown): number | null {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+function positiveFiniteNumber(value: unknown): number | null {
+  const numeric = finiteNumber(value);
+  return numeric !== null && numeric > 0 ? numeric : null;
+}
+
+function normalizeList(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.map((item) => String(item).trim()).filter(Boolean)
+    : [];
+}
+
 // ── Types ────────────────────────────────────────────────────────────────────
 type Props = {
   record: ApplicantRecord;
@@ -38,12 +67,13 @@ type Props = {
   nextAction: NextBestAction;
 };
 type TimelineItem = { type: string; summary: string; timestamp: string };
-type ValueDiff = {
-  field: string;
-  oldValue: string;
-  newValue: string;
-  confidence: string;
-};
+type ValueDiff = ApplicantMergeReviewRow;
+const updateCategories: UpdateCategory[] = [
+  "Landlord Terms",
+  "Applicant Information",
+  "Screening Documents",
+  "AI Notes",
+];
 type AttachedFile = {
   id: string;
   filename: string;
@@ -71,16 +101,23 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
   const [editPhone, setEditPhone] = useState(record.phone);
   const [editEmail, setEditEmail] = useState(record.email);
   const [editRent, setEditRent] = useState(record.monthlyRent);
-  const [editIncome, setEditIncome] = useState(record.monthlyIncome);
+  const [editIncome, setEditIncome] = useState(
+    record.applicantIncomeAmount ?? record.incomeAmount ?? record.normalizedMonthlyIncome ?? record.monthlyIncome,
+  );
+  const [editIncomeFrequency, setEditIncomeFrequency] = useState(record.applicantIncomeFrequency ?? record.incomeFrequency ?? "monthly");
+  const [editSecurityDepositMonths, setEditSecurityDepositMonths] = useState(record.securityDepositMonths ?? 1);
+  const [editFirstMonthDue, setEditFirstMonthDue] = useState(record.requireFirstMonthAtSigning !== false);
+  const [editDueAtSigningOverride, setEditDueAtSigningOverride] = useState(record.dueAtSigningAmount ?? record.dueAtSigning ?? 0);
   const [editMoveIn, setEditMoveIn] = useState(record.moveInDate);
   const [editVoucher, setEditVoucher] = useState(record.housingSupport);
-  const [editStatus, setEditStatus] = useState(record.status);
+  const [editStatus, setEditStatus] = useState(normalizeApplicantStatus(record.status));
   const [editNotes, setEditNotes] = useState(record.notes.join("\n"));
 
   // ── Paste new info state ──
   const [pastedText, setPastedText] = useState("");
   const [analyzing, setAnalyzing] = useState(false);
   const [diffs, setDiffs] = useState<ValueDiff[]>([]);
+  const [mergedApplicant, setMergedApplicant] = useState<ApplicantRecord | null>(null);
   const [aiStatus, setAiStatus] = useState("");
   const [aiError, setAiError] = useState("");
 
@@ -104,27 +141,168 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
   ]);
 
   // ── Affordability fix ──
-  const normalizedMonthlyIncome =
-    finiteNumber(record.normalizedMonthlyIncome) ?? finiteNumber(record.monthlyIncome);
+  const normalizedMonthlyIncome = getSavedMonthlyIncome(record);
   const computedRatio = calculateIncomeToRentRatio(
     normalizedMonthlyIncome,
     finiteNumber(record.responsibleRent) || finiteNumber(record.monthlyRent),
   );
   const correctedRatio =
-    finiteNumber(record.incomeToRentRatio) ??
-    finiteNumber(record.affordabilityRatio) ??
+    positiveFiniteNumber(record.incomeToRentRatio) ??
+    positiveFiniteNumber(record.affordabilityRatio) ??
     computedRatio;
   const ratioDisplay =
-    correctedRatio !== null ? `${correctedRatio.toFixed(1)}x` : "Needs confirmation";
+    correctedRatio !== null
+      ? `${correctedRatio.toFixed(1)}x`
+      : "Income-to-rent ratio not calculated — applicant income not available";
   const looksYearly = false;
   const monthlyIncomeDisplay =
     normalizedMonthlyIncome !== null
       ? `$${Math.round(normalizedMonthlyIncome).toLocaleString()}`
       : "Needs confirmation";
+  const dueAtSigningAmount =
+    positiveFiniteNumber(record.dueAtSigningAmount) ?? positiveFiniteNumber(record.dueAtSigning);
+  const dueAtSigningDisplay =
+    dueAtSigningAmount !== null
+      ? `$${Math.round(dueAtSigningAmount).toLocaleString()}`
+      : "Needs confirmation";
+  const dueAtSigningBreakdown = dueAtSigningAmount
+    ? formatDueAtSigningBreakdown({
+        firstMonthRent: record.firstMonthRent ?? null,
+        securityDeposit: record.securityDeposit ?? null,
+        brokerFee: record.brokerFee ?? null,
+        petFee: record.petFee ?? null,
+        otherMoveInFees: record.otherMoveInFees ?? null,
+      })
+    : "Needs confirmation";
+  const editNormalizedIncome = normalizeIncomeToMonthly({
+    amount: editIncome || null,
+    frequency: editIncomeFrequency as IncomeFrequency,
+  });
+  const editMonthlyIncome =
+    editNormalizedIncome ?? (editIncomeFrequency === "monthly" ? editIncome : null);
+  const editSecurityDeposit =
+    editRent && editSecurityDepositMonths ? editRent * editSecurityDepositMonths : 0;
+  const editFirstMonthRent = editFirstMonthDue ? editRent : 0;
+  const editDueAtSigningCalculated =
+    editDueAtSigningOverride || editFirstMonthRent + editSecurityDeposit;
+  const editRatio = calculateIncomeToRentRatio(editMonthlyIncome, editRent || null);
+  const summaryText = record.aiSummary || intel.confidenceReason;
+  const visibleNotes = normalizeList(record.importantNotes).length
+    ? normalizeList(record.importantNotes)
+    : record.notes.filter((note) => !/^Raw reviewed text:/i.test(note));
+  const strengths = normalizeList(record.aiStrengths).length
+    ? normalizeList(record.aiStrengths)
+    : [intel.mainStrength].filter(Boolean);
+  const concerns = normalizeList(record.aiRedFlags).length
+    ? normalizeList(record.aiRedFlags)
+    : [intel.mainConcern, ...record.redFlags].filter(Boolean);
+  const missingDocuments = normalizeList(record.missingDocuments).length
+    ? normalizeList(record.missingDocuments)
+    : intel.documentsMissing;
+  const receivedDocuments = normalizeList(record.receivedDocuments).length
+    ? normalizeList(record.receivedDocuments)
+    : intel.documentsReceived;
+  const followUpQuestions = normalizeList(record.followUpQuestions);
+  const pastedSource = record.rawPastedText || record.sourceText || "";
+  const documentSource = record.extractedDocumentText || record.documentExtracts || "";
+  const rawSource = record.rawText || "";
+  const uploadedFiles = record.uploadedFiles ?? [];
 
   // ── Scroll helpers ──
   function scrollTo(ref: React.RefObject<HTMLDivElement | null>) {
     ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function buildApplicantPayload(
+    overrides: Partial<ApplicantRecord> & Record<string, unknown> = {},
+  ) {
+    return {
+      name: record.name,
+      phone: record.phone,
+      email: record.email,
+      propertyAddress: record.propertyAddress,
+      propertyId: record.propertyId ?? "",
+      propertyUnit: record.propertyUnit ?? "",
+      propertyNickname: record.propertyNickname ?? "",
+      borough: record.borough ?? "",
+      neighborhood: record.neighborhood ?? "",
+      utilitiesIncluded: Boolean(record.utilitiesIncluded),
+      bedrooms: record.bedrooms ?? null,
+      bathrooms: record.bathrooms ?? null,
+      propertyCity: record.propertyCity,
+      propertyState: record.propertyState,
+      propertyPostalCode: record.propertyPostalCode,
+      moveInDate: record.moveInDate,
+      coApplicants: record.coApplicants,
+      applicationSource: record.applicationSource,
+      monthlyRent: record.monthlyRent,
+      propertyMonthlyRent: record.propertyMonthlyRent ?? record.monthlyRent,
+      rentSource: record.rentSource ?? "",
+      incomeSource: record.incomeSource ?? "",
+      dueAtSigningSource: record.dueAtSigningSource ?? "",
+      securityDepositMonths: record.securityDepositMonths ?? 1,
+      requireFirstMonthAtSigning: record.requireFirstMonthAtSigning !== false,
+      financialFieldsCorrected: Boolean(record.financialFieldsCorrected),
+      financialCorrectionNote: record.financialCorrectionNote ?? "",
+      monthlyIncome: record.monthlyIncome,
+      dueAtSigning: record.dueAtSigning ?? 0,
+      dueAtSigningAmount: record.dueAtSigningAmount ?? record.dueAtSigning ?? 0,
+      dueAtSigningRawText: record.dueAtSigningRawText ?? "",
+      dueAtSigningNeedsConfirmation: Boolean(record.dueAtSigningNeedsConfirmation),
+      applicantGrossMonthlyIncome: record.applicantGrossMonthlyIncome ?? record.normalizedMonthlyIncome ?? null,
+      applicantAnnualIncome: record.applicantAnnualIncome ?? null,
+      applicantIncomeAmount: record.applicantIncomeAmount ?? record.incomeAmount ?? null,
+      applicantIncomeFrequency: record.applicantIncomeFrequency ?? record.incomeFrequency ?? "unknown",
+      tenantPortion: record.tenantPortion ?? record.tenantPortionRent ?? 0,
+      voucherPortion: record.voucherPortion ?? record.monthlySubsidyAmount ?? 0,
+      securityDepositAmount: record.securityDepositAmount ?? record.securityDeposit ?? 0,
+      firstMonthRentAmount: record.firstMonthRentAmount ?? record.firstMonthRent ?? 0,
+      securityDeposit: record.securityDeposit ?? 0,
+      firstMonthRent: record.firstMonthRent ?? 0,
+      brokerFee: record.brokerFee ?? 0,
+      petFee: record.petFee ?? 0,
+      otherMoveInFees: record.otherMoveInFees ?? 0,
+      incomeAmount: record.incomeAmount ?? null,
+      incomeFrequency: record.incomeFrequency ?? "unknown",
+      normalizedMonthlyIncome:
+        record.normalizedMonthlyIncome ?? record.monthlyIncome,
+      incomeToRentRatio: record.incomeToRentRatio ?? null,
+      housingSupport: record.housingSupport,
+      supportProgram: record.supportProgram,
+      monthlySubsidyAmount: record.monthlySubsidyAmount,
+      tenantPortionRent: record.tenantPortionRent,
+      subsidyStatus: record.subsidyStatus,
+      inspectionStatus: record.inspectionStatus,
+      creditScore: record.creditScore ?? 0,
+      residentScore: record.residentScore,
+      rentalHistoryScore: record.scores.rentalHistory,
+      rulesComplianceScore: record.scores.rulesCompliance,
+      timelineScore: record.scores.timeline,
+      communicationScore: record.scores.communication,
+      documentationScore: record.scores.documentation,
+      notes: record.notes,
+      rawText: record.rawText ?? "",
+      rawPastedText: record.rawPastedText ?? "",
+      sourceText: record.sourceText ?? "",
+      extractedDocumentText: record.extractedDocumentText ?? "",
+      documentExtracts: record.documentExtracts ?? "",
+      summary: record.aiSummary ?? "",
+      aiRecommendedStatus: record.aiRecommendedStatus ?? "",
+      concerns: record.aiRedFlags ?? [],
+      strengths: record.aiStrengths ?? [],
+      suggestedMessage: record.suggestedMessage ?? "",
+      extractedFieldSummary: record.extractedFieldSummary ?? "",
+      missingDocuments: record.missingDocuments ?? [],
+      receivedDocuments: record.receivedDocuments ?? [],
+      followUpQuestions: record.followUpQuestions ?? [],
+      importantNotes: record.importantNotes ?? [],
+      nextStep: record.nextStep ?? record.aiRecommendation ?? "",
+      extractedFields: record.extractedFields ?? {},
+      uploadedFiles: record.uploadedFiles ?? [],
+      updateHistory: record.updateHistory ?? [],
+      status: normalizeApplicantStatus(record.status),
+      ...overrides,
+    };
   }
 
   // ── Delete ──
@@ -148,17 +326,38 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
       await fetch(`/api/applicants/${record._id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(buildApplicantPayload({
           name: editName,
           phone: editPhone,
           email: editEmail,
           monthlyRent: editRent,
-          monthlyIncome: editIncome,
+          propertyMonthlyRent: editRent,
+          rentSource: "Manual correction",
+          incomeSource: "Manual correction",
+          monthlyIncome: editMonthlyIncome ?? editIncome,
+          applicantGrossMonthlyIncome: editMonthlyIncome,
+          applicantAnnualIncome: editIncomeFrequency === "yearly" ? editIncome : null,
+          applicantIncomeAmount: editIncome || null,
+          applicantIncomeFrequency: editIncomeFrequency,
+          incomeAmount: editIncome || null,
+          incomeFrequency: editIncomeFrequency,
+          normalizedMonthlyIncome: editMonthlyIncome,
+          incomeToRentRatio: editRatio,
+          securityDepositMonths: editSecurityDepositMonths,
+          requireFirstMonthAtSigning: editFirstMonthDue,
+          firstMonthRent: editFirstMonthRent,
+          firstMonthRentAmount: editFirstMonthRent,
+          securityDeposit: editSecurityDeposit,
+          securityDepositAmount: editSecurityDeposit,
+          dueAtSigning: editDueAtSigningCalculated,
+          dueAtSigningAmount: editDueAtSigningCalculated,
+          dueAtSigningNeedsConfirmation: !editDueAtSigningCalculated,
+          dueAtSigningSource: editDueAtSigningOverride ? "Manual override" : "Calculated from rent + security",
           moveInDate: editMoveIn,
           housingSupport: editVoucher,
-          status: editStatus,
+          status: normalizeApplicantStatus(editStatus),
           notes: editNotes.split("\n").filter(Boolean),
-        }),
+        })),
       });
       setShowEdit(false);
       setSaveMessage("Applicant updated.");
@@ -176,73 +375,19 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
     setAnalyzing(true);
     setAiError("");
     setDiffs([]);
+    setMergedApplicant(null);
     try {
-      const res = await fetch("/api/ai/one-minute-decision", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: pastedText }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.message);
-
-      // Build diffs
-      const changes: ValueDiff[] = [];
-      const c = (f: string, o: string, n: string) => {
-        if (n && n !== o && n !== "Not found")
-          changes.push({
-            field: f,
-            oldValue: o || "(empty)",
-            newValue: n,
-            confidence: data.confidenceLevel,
-          });
-      };
-
-      c(
-        "Income",
-        record.monthlyIncome ? `$${record.monthlyIncome}` : "",
-        `${data.affordabilityDisplay} (${data.householdIncomeDisplay ?? data.householdIncome})`,
+      const existing = await loadExistingApplicant<ApplicantRecord>(
+        record._id,
+        record,
       );
-      c(
-        "Rent",
-        record.monthlyRent ? `$${record.monthlyRent}` : "",
-        data.monthlyRent,
-      );
-      c("Phone", record.phone, data.phone);
-      c("Email", record.email, data.email);
-      c("Move-in", record.moveInDate, data.moveInDate);
-      if (data.suggestedStatus && data.suggestedStatus !== record.status)
-        changes.push({
-          field: "Status",
-          oldValue: record.status,
-          newValue: data.suggestedStatus,
-          confidence: "Medium",
-        });
-      if (data.mainStrength && data.mainStrength !== intel.mainStrength)
-        changes.push({
-          field: "Strength",
-          oldValue: intel.mainStrength ?? "",
-          newValue: data.mainStrength,
-          confidence: "Medium",
-        });
-      if (data.mainConcern && data.mainConcern !== intel.mainConcern)
-        changes.push({
-          field: "Concern",
-          oldValue: intel.mainConcern ?? "",
-          newValue: data.mainConcern,
-          confidence: "Medium",
-        });
-      if (data.missingDocuments?.length)
-        changes.push({
-          field: "Missing docs",
-          oldValue: intel.documentsMissing.join(", ") || "None",
-          newValue: data.missingDocuments.join(", "),
-          confidence: "Medium",
-        });
+      const merge = mergeApplicantUpdate(existing, pastedText);
 
-      setDiffs(changes);
+      setDiffs(merge.reviewRows);
+      setMergedApplicant(merge.mergedApplicant);
       setAiStatus(
-        changes.length
-          ? "AI found potential updates"
+        merge.reviewRows.length
+          ? "AI merged new information with saved applicant record."
           : "No new information detected in the pasted text.",
       );
     } catch (e: any) {
@@ -255,31 +400,12 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
   // ── Apply AI updates ──
   async function applyAiUpdates() {
     setSaving(true);
+    setAiError("");
     try {
-      // Build merged notes
-      const updatedNotes = [
-        ...record.notes,
-        `New info analyzed: ${pastedText.slice(0, 200)}${pastedText.length > 200 ? "…" : ""}`,
-      ];
-      // Build merged fields from diffs
-      const patch: any = { notes: updatedNotes };
-      for (const d of diffs) {
-        if (d.field === "Income")
-          patch.monthlyIncome = record.monthlyIncome; // keep existing, user can edit
-        else if (d.field === "Rent")
-          patch.monthlyRent =
-            parseFloat(d.newValue.replace(/[^0-9.]/g, "")) ||
-            record.monthlyRent;
-        else if (d.field === "Phone") patch.phone = d.newValue;
-        else if (d.field === "Email") patch.email = d.newValue;
-        else if (d.field === "Move-in") patch.moveInDate = d.newValue;
-        else if (d.field === "Status") patch.status = d.newValue;
+      if (!mergedApplicant) {
+        throw new Error("Analyze the new information before applying updates.");
       }
-      await fetch(`/api/applicants/${record._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
+      await saveApplicantUpdate(record._id, buildApplicantPayload(mergedApplicant) as ApplicantRecord);
       setTimeline((t) => [
         ...t,
         {
@@ -290,10 +416,11 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
       ]);
       setPastedText("");
       setDiffs([]);
+      setMergedApplicant(null);
       setAiStatus("Applicant updated with new info.");
       router.refresh();
-    } catch {
-      setAiError("Could not save updates.");
+    } catch (error) {
+      setAiError(error instanceof Error ? error.message : "Could not save updates.");
     } finally {
       setSaving(false);
     }
@@ -347,6 +474,11 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
       {/* ═══════════════════════════════════════════════════════════════════════
           TOP HERO CARD
           ════════════════════════════════════════════════════════════════════ */}
+      {record.financialFieldsCorrected ? (
+        <div className="mb-4 rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          {record.financialCorrectionNote || "Financial fields were corrected from source data."}
+        </div>
+      ) : null}
       <section className="card overflow-hidden">
         <div className="px-5 py-4 sm:px-6">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
@@ -484,7 +616,7 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
                 onChange={setEditEmail}
               />
               <EditField
-                label="Monthly Rent"
+                label="Property monthly rent"
                 type="number"
                 value={String(editRent || "")}
                 onChange={(v) => setEditRent(parseFloat(v) || 0)}
@@ -509,6 +641,48 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
                   </span>
                 )}
               </label>
+              <label className="grid gap-1">
+                <span className="text-xs font-bold text-[#475569]">
+                  Income frequency
+                </span>
+                <select
+                  className="dashboard-input text-sm"
+                  value={editIncomeFrequency}
+                  onChange={(e) => setEditIncomeFrequency(e.target.value as IncomeFrequency)}
+                >
+                  {["monthly", "yearly", "weekly", "biweekly", "hourly", "unknown"].map((value) => (
+                    <option key={value} value={value}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <EditField
+                label="Security deposit months"
+                type="number"
+                value={String(editSecurityDepositMonths || "")}
+                onChange={(v) => setEditSecurityDepositMonths(parseFloat(v) || 0)}
+                min="0"
+              />
+              <label className="flex items-center gap-2 rounded-2xl border border-[#b8c4d4] px-3 py-2 text-sm font-bold text-[#475569]">
+                <input
+                  type="checkbox"
+                  checked={editFirstMonthDue}
+                  onChange={(e) => setEditFirstMonthDue(e.target.checked)}
+                />
+                First month due at signing
+              </label>
+              <EditField
+                label="Due at signing override"
+                type="number"
+                value={String(editDueAtSigningOverride || "")}
+                onChange={(v) => setEditDueAtSigningOverride(parseFloat(v) || 0)}
+                min="0"
+              />
+              <div className="rounded-2xl border border-[#b8c4d4] bg-[#f8fafc] px-3 py-2 text-sm font-semibold">
+                <p>New ratio: {editRatio ? `${editRatio.toFixed(1)}x rent` : "Needs confirmation"}</p>
+                <p>Due at signing: ${Math.round(editDueAtSigningCalculated || 0).toLocaleString()}</p>
+              </div>
               <EditField
                 label="Move-in Date"
                 type="date"
@@ -536,20 +710,11 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
                 <select
                   className="dashboard-input text-sm"
                   value={editStatus}
-                  onChange={(e) => setEditStatus(e.target.value as any)}
+                  onChange={(e) =>
+                    setEditStatus(normalizeApplicantStatus(e.target.value))
+                  }
                 >
-                  {[
-                    "New",
-                    "Screening",
-                    "Review",
-                    "Missing Documents",
-                    "Ready for Review",
-                    "Manual Review",
-                    "Strong Candidate",
-                    "Approved",
-                    "Declined",
-                    "Leased",
-                  ].map((s) => (
+                  {applicantStatusValues.map((s) => (
                     <option key={s} value={s}>
                       {s}
                     </option>
@@ -631,31 +796,80 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
         {diffs.length > 0 && (
           <div className="mt-4 rounded-2xl border border-[#ffccb5] bg-[#fff0ea] p-4">
             <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
-              AI found these updates
+              AI merged new information with saved applicant record.
             </p>
-            <div className="mt-3 grid gap-2">
-              {diffs.map((d) => (
-                <div key={d.field} className="card-inner px-4 py-3">
-                  <p className="text-xs font-bold text-[#475569]">
-                    {d.field} ·{" "}
-                    <span className="text-[#0369a1]">
-                      {d.confidence} confidence
-                    </span>
-                  </p>
-                  <div className="mt-1 grid grid-cols-2 gap-2 text-sm">
-                    <div>
-                      <span className="text-[#dc2626] line-through">
-                        {d.oldValue}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[#059669] font-bold">
-                        {d.newValue}
-                      </span>
+            <p className="mt-1 text-xs font-medium text-[#475569]">
+              Review the current saved value, the new information found, and
+              the final merged value before saving.
+            </p>
+            <div className="mt-3 grid gap-3">
+              {updateCategories.map((category) => {
+                const items = diffs.filter((diff) => diff.category === category);
+                if (items.length === 0) return null;
+
+                return (
+                  <div key={category}>
+                    <p className="text-xs font-bold uppercase tracking-wider text-[#475569]">
+                      {category}
+                    </p>
+                    <div className="mt-2 grid gap-2">
+                      {items.map((d, index) => (
+                        <div
+                          key={`${d.category}-${d.field}-${index}`}
+                          className="card-inner px-4 py-3"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-bold text-[#475569]">
+                              {d.label} ·{" "}
+                              <span className="text-[#0369a1]">
+                                {d.confidence} confidence
+                              </span>
+                            </p>
+                            <span
+                              className={
+                                d.willApply
+                                  ? "pill pill-success"
+                                  : "pill pill-warning"
+                              }
+                            >
+                              {d.willApply ? "Will apply" : "Preserved"}
+                            </span>
+                          </div>
+                          <div className="mt-2 grid gap-2 text-sm lg:grid-cols-3">
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-[#475569]">
+                                Current saved value
+                              </p>
+                              <span className="text-[#dc2626] line-through">
+                                {d.currentValue}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-[#475569]">
+                                New information found
+                              </p>
+                              <span className="font-bold text-[#0369a1]">
+                                {d.newInfo}
+                              </span>
+                            </div>
+                            <div>
+                              <p className="text-[10px] font-bold uppercase tracking-wider text-[#475569]">
+                                Final merged value
+                              </p>
+                              <span className="font-bold text-[#059669]">
+                                {d.finalValue}
+                              </span>
+                            </div>
+                          </div>
+                          <p className="mt-2 text-xs font-medium text-[#475569]">
+                            {d.reason}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
             <div className="mt-4 flex gap-2">
               <button
@@ -671,6 +885,7 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
                 className="btn-ghost text-sm"
                 onClick={() => {
                   setDiffs([]);
+                  setMergedApplicant(null);
                   setAiStatus("");
                 }}
               >
@@ -756,22 +971,33 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
           ════════════════════════════════════════════════════════════════════ */}
       <div className="grid gap-5 lg:grid-cols-2">
         <Card title="Summary">
+          <div className="card-inner px-4 py-3">
+            <p className="text-xs font-bold text-[#475569]">Applicant summary</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6">
+              {summaryText || "No AI summary saved yet."}
+            </p>
+          </div>
+          <Field
+            label="AI recommendation"
+            value={record.aiRecommendedStatus || "Not provided"}
+          />
+          <Field label="Saved status" value={record.status} />
           <Field label="Decision" value={intel.verdict} />
           <Field
             label="Strength"
-            value={intel.mainStrength ?? "Calculating..."}
+            value={strengths[0] ?? "Calculating..."}
           />
           <Field
             label="Concern"
-            value={intel.mainConcern ?? "None identified"}
+            value={concerns[0] ?? "None identified"}
           />
         </Card>
         <Card title="Missing Documents">
-          {intel.documentsMissing.length === 0 ? (
+          {missingDocuments.length === 0 ? (
             <p className="text-sm text-[#475569]">All documents complete</p>
           ) : (
             <ul className="space-y-2">
-              {intel.documentsMissing.map((d) => (
+              {missingDocuments.map((d) => (
                 <li
                   key={d}
                   className="card-inner flex items-center gap-3 px-4 py-3"
@@ -786,14 +1012,18 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
           )}
         </Card>
         <Card title="Strengths & Concerns">
-          <div className="card-inner px-4 py-3">
-            <p className="text-xs font-bold text-[#059669]">Strength</p>
-            <p className="mt-1 text-sm font-semibold">{intel.mainStrength}</p>
-          </div>
-          <div className="card-inner px-4 py-3">
-            <p className="text-xs font-bold text-[#d97706]">Concern</p>
-            <p className="mt-1 text-sm font-semibold">{intel.mainConcern}</p>
-          </div>
+          {strengths.map((strength) => (
+            <div key={strength} className="card-inner px-4 py-3">
+              <p className="text-xs font-bold text-[#059669]">Strength</p>
+              <p className="mt-1 text-sm font-semibold">{strength}</p>
+            </div>
+          ))}
+          {concerns.map((concern) => (
+            <div key={concern} className="card-inner px-4 py-3">
+              <p className="text-xs font-bold text-[#d97706]">Concern</p>
+              <p className="mt-1 text-sm font-semibold">{concern}</p>
+            </div>
+          ))}
           {record.redFlags.length > 0 && (
             <div className="rounded-xl border border-[#fecaca] bg-[#fef2f2] px-4 py-3">
               <p className="text-xs font-bold text-[#dc2626]">Red Flags</p>
@@ -812,21 +1042,49 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
               value={formatRentDisplay(finiteNumber(record.monthlyRent))}
             />
             <Mini
+              label="Rent Source"
+              value={record.rentSource || "Needs confirmation"}
+            />
+            <Mini
               label="Income"
               value={monthlyIncomeDisplay}
+            />
+            <Mini
+              label="Income Source"
+              value={record.incomeSource || "Needs confirmation"}
             />
             <Mini
               label="Ratio"
               value={ratioDisplay}
             />
+            <Mini
+              label="Due at Signing"
+              value={dueAtSigningDisplay}
+            />
+            <Mini
+              label="Breakdown"
+              value={dueAtSigningBreakdown}
+            />
+            <Mini
+              label="Due Source"
+              value={record.dueAtSigningSource || "Needs confirmation"}
+            />
+            <Mini
+              label="Security"
+              value={
+                record.securityDeposit && record.securityDeposit > 0
+                  ? `$${record.securityDeposit.toLocaleString()}`
+                  : "Needs confirmation"
+              }
+            />
             <Mini label="Voucher" value={record.housingSupport} />
           </div>
         </Card>
         <Card title="Notes & Activity">
-          {record.notes.length === 0 ? (
+          {visibleNotes.length === 0 ? (
             <p className="text-sm text-[#475569]">No notes yet.</p>
           ) : (
-            record.notes.map((n, i) => (
+            visibleNotes.map((n, i) => (
               <div key={i} className="card-inner px-4 py-3">
                 <p className="text-xs font-medium text-[#475569] whitespace-pre-wrap">
                   {n}
@@ -835,7 +1093,63 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
             ))
           )}
         </Card>
+        <Card title="Received Documents">
+          {receivedDocuments.length === 0 ? (
+            <p className="text-sm text-[#475569]">No documents confirmed yet.</p>
+          ) : (
+            receivedDocuments.map((item) => (
+              <div key={item} className="card-inner px-4 py-3 text-sm font-semibold">
+                {item}
+              </div>
+            ))
+          )}
+        </Card>
+        <Card title="Suggested Next Step">
+          <Field label="Next step" value={record.aiRecommendation || record.nextStep || nextAction.nextBestActionLabel} />
+          {followUpQuestions.length > 0 ? (
+            <div className="card-inner px-4 py-3">
+              <p className="text-xs font-bold text-[#475569]">Follow-up questions</p>
+              <ul className="mt-2 list-inside list-disc text-sm font-semibold">
+                {followUpQuestions.map((question) => (
+                  <li key={question}>{question}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          {record.suggestedMessage ? (
+            <div className="card-inner px-4 py-3">
+              <p className="text-xs font-bold text-[#475569]">Suggested message</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm font-semibold leading-6">
+                {record.suggestedMessage}
+              </p>
+            </div>
+          ) : null}
+        </Card>
       </div>
+
+      <details className="card p-5 sm:p-6">
+        <summary className="cursor-pointer font-bold text-[#475569]">
+          Source material / audit trail
+        </summary>
+        <div className="mt-4 grid gap-3">
+          <AuditBlock title="Original pasted text" value={pastedSource || rawSource} />
+          <AuditBlock title="Extracted document text" value={documentSource} />
+          <div className="card-inner px-4 py-3">
+            <p className="text-xs font-bold text-[#475569]">Uploaded files</p>
+            {uploadedFiles.length === 0 ? (
+              <p className="mt-1 text-sm font-semibold">No uploaded files saved.</p>
+            ) : (
+              <div className="mt-2 grid gap-2">
+                {uploadedFiles.map((file) => (
+                  <p key={`${file.filename}-${file.uploadedAt}`} className="text-sm font-semibold">
+                    {file.filename} · {(file.size / 1024).toFixed(0)} KB · {file.extractionStatus}
+                  </p>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </details>
 
       {/* ═══════════════════════════════════════════════════════════════════════
           C. ACTIVITY / TIMELINE
@@ -875,6 +1189,10 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Source", record.applicationSource],
+            ["Property", record.propertyNickname || record.propertyAddress || "N/A"],
+            ["Unit", record.propertyUnit || "N/A"],
+            ["Neighborhood", record.neighborhood || record.borough || "N/A"],
+            ["Utilities", record.utilitiesIncluded ? "Included" : "Not included / unknown"],
             ["Move-in", record.moveInDate || "Not provided"],
             [
               "Resident Score",
@@ -886,6 +1204,20 @@ export function ApplicantDetailClient({ record, intel, nextAction }: Props) {
               record.tenantPortionRent > 0
                 ? `$${record.tenantPortionRent}`
                 : "N/A",
+            ],
+            [
+              "Due at Signing",
+              dueAtSigningDisplay,
+            ],
+            [
+              "Due at Signing Breakdown",
+              dueAtSigningBreakdown,
+            ],
+            [
+              "Security Deposit",
+              record.securityDeposit && record.securityDeposit > 0
+                ? `$${record.securityDeposit.toLocaleString()}`
+                : "Needs confirmation",
             ],
             ["Subsidy Status", record.subsidyStatus],
             ["Inspection", record.inspectionStatus],
@@ -1013,6 +1345,21 @@ function Field({ label, value }: { label: string; value: string }) {
     <div className="card-inner px-4 py-3">
       <p className="text-xs font-bold text-[#475569]">{label}</p>
       <p className="mt-1 text-sm font-semibold">{value}</p>
+    </div>
+  );
+}
+
+function AuditBlock({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="card-inner px-4 py-3">
+      <p className="text-xs font-bold text-[#475569]">{title}</p>
+      {value ? (
+        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-[#f8fafc] p-3 text-xs font-medium leading-5 text-[#334155]">
+          {value}
+        </pre>
+      ) : (
+        <p className="mt-1 text-sm font-semibold">No source text saved.</p>
+      )}
     </div>
   );
 }

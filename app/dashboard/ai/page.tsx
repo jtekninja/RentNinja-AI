@@ -1,8 +1,9 @@
 import { OneMinuteDecision } from "@/components/dashboard/one-minute-decision";
 import { WorkspacePageShell } from "@/components/dashboard/workspace-page-shell";
+import { auth } from "@/auth";
 import { hasOpenAIConfig } from "@/lib/openai";
-import { requireSession } from "@/lib/require-session";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 const tools = [
   {
@@ -38,8 +39,32 @@ const tools = [
 ] as const;
 
 export default async function AiAssistantPage() {
-  await requireSession();
-  const demoMode = !hasOpenAIConfig();
+  let demoMode = true;
+  let pageWarning = "";
+  let shouldRedirectToLogin = false;
+
+  try {
+    const session = await auth();
+
+    if (!session?.user) {
+      shouldRedirectToLogin = true;
+    } else {
+      demoMode = !hasOpenAIConfig();
+      if (demoMode) {
+        pageWarning = "AI service not configured. Add OPENAI_API_KEY to enable live AI.";
+      }
+    }
+  } catch (error) {
+    console.error('Route "/dashboard/ai" failed during server render:', {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    pageWarning =
+      "AI Dashboard could not load all account services. The AI tools are still available in demo mode.";
+  }
+
+  if (shouldRedirectToLogin) {
+    redirect("/login");
+  }
 
   return (
     <WorkspacePageShell
@@ -54,10 +79,15 @@ export default async function AiAssistantPage() {
         </span>
         {demoMode && (
           <span className="text-xs text-[#475569] font-medium">
-            Add OPENAI_API_KEY to enable live AI
+            AI service not configured
           </span>
         )}
       </div>
+      {pageWarning ? (
+        <div className="rounded-2xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-bold text-amber-800">
+          {pageWarning}
+        </div>
+      ) : null}
 
       {/* ── 1-Minute Review ── */}
       <OneMinuteDecision />

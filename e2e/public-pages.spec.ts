@@ -29,3 +29,31 @@ test('about page uses the public brand shell', async ({ page }) => {
   ).toBeVisible();
   await expect(page.getByText(/landlords, property managers, and leasing/i)).toBeVisible();
 });
+
+test('mobile header logo and hamburger menu work at Galaxy width', async ({ page }) => {
+  await page.setViewportSize({ width: 412, height: 915 });
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  const header = page.locator('header').first();
+  await expect(header.getByRole('link', { name: /Go to home page/i })).toBeVisible();
+  const headerLogo = header.locator('> div').first();
+  await expect(headerLogo.getByText('RentNinja')).toBeVisible();
+  await expect(headerLogo.getByText('AI')).toBeVisible();
+
+  const menuButton = header.locator('summary[aria-controls="mobile-site-menu"]');
+  await expect(menuButton).toHaveAttribute('aria-label', /Open menu|Close menu/);
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await menuButton.click();
+
+  const menu = page.getByRole('dialog', { name: /Mobile navigation/i });
+  await expect(menu).toBeVisible();
+  for (const label of ['About', 'Contact', 'Sign in', 'Get started']) {
+    await expect(menu.getByRole('link', { name: label })).toBeVisible();
+  }
+
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(1);
+
+  await menu.getByRole('link', { name: 'About' }).click();
+  await expect(page).toHaveURL(/\/about$/);
+});

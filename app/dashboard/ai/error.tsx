@@ -11,7 +11,10 @@ export default function AiErrorPage({
   reset: () => void;
 }) {
   useEffect(() => {
-    console.error("AI tools error:", error);
+    console.error('Route "/dashboard/ai" failed to render:', {
+      message: error.message,
+      digest: error.digest,
+    });
   }, [error]);
 
   return (
@@ -20,9 +23,9 @@ export default function AiErrorPage({
         <p className="text-xs font-bold uppercase tracking-wider text-[#ff4b1f]">
           AI Tools
         </p>
-        <h1 className="mt-2 text-xl font-bold">Something went wrong</h1>
+        <h1 className="mt-2 text-xl font-bold">AI Dashboard could not load.</h1>
         <p className="mt-2 text-sm leading-6 text-[#475569]">
-          The AI tools page couldn't load. This may be a temporary issue.
+          AI Dashboard could not load. Please try again or check server logs.
         </p>
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <button onClick={reset} className="btn-primary text-sm">
